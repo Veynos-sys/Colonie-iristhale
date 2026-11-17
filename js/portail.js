@@ -264,15 +264,26 @@ function echoppe() {
 }
 
 // Description officielle : première phrase visible, la suite dépliable
-// Description officielle : un premier paragraphe (2 à 3 phrases), puis un bouton pour le reste
+// Description officielle : première phrase visible, la suite dépliable
 function texteObjet(t) {
-  const phrases = t.match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g) || [t];
-  let debut = '';
-  let i = 0;
-  while (i < phrases.length && (debut.length < 220 || i < 1)) debut += phrases[i++];
-  const reste = phrases.slice(i).join('').trim();
-  if (!reste) return `<span class="texte-objet">${esc(t)}</span>`;
-  return `<span class="texte-objet">${esc(debut.trim())}</span><details class="suite-objet"><summary><span class="bouton-suite">Afficher la suite</span></summary><span class="texte-objet">${esc(reste)}</span></details>`;
+  const m = t.match(/^(.{20,230}?[.!?])\s+(.*)$/s);
+  if (!m) return `<span class="texte-objet">${esc(t)}</span>`;
+  return `<span class="texte-objet">${esc(m[1])}</span><details class="suite-objet"><summary>Lire la suite</summary><span class="texte-objet">${esc(m[2])}</span></details>`;
+}
+
+// Journal : le premier paragraphe, puis un bouton pour le reste
+function corpsJournal(t) {
+  if (!t) return '';
+  let paras = t.trim().split(/\n{2,}/);
+  if (paras.length === 1 && paras[0].length > 450) {
+    const phrases = paras[0].match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g) || [paras[0]];
+    let debut = '', k = 0;
+    while (k < phrases.length && (debut.length < 300 || k < 1)) debut += phrases[k++];
+    const reste = phrases.slice(k).join('').trim();
+    paras = reste ? [debut.trim(), reste] : [paras[0]];
+  }
+  if (paras.length === 1) return para(paras[0]);
+  return `${para(paras[0])}<details class="suite-journal"><summary><span class="bouton-suite">Afficher la suite</span></summary>${para(paras.slice(1).join('\n\n'))}</details>`;
 }
 
 function missions() {
@@ -343,7 +354,7 @@ function journal() {
   ${liste.map(j => `<article class="entree-journal parchemin type-${j.type}">
     <p class="meta" style="margin:0">${j.jour ? `Jour ${esc(j.jour)} · ` : ''}${TYPES_JOURNAL[j.type]}${j.auteur ? ` · ${esc(j.auteur)}` : ''}</p>
     <h3>${esc(j.titre)}</h3>
-    <div class="corps">${para(j.contenu)}</div>
+    <div class="corps">${corpsJournal(j.contenu)}</div>
     ${j.lien_discord ? `<p><a href="${esc(j.lien_discord)}" target="_blank" rel="noopener">Lire sur le Discord</a></p>` : ''}
   </article>`).join('') || '<p class="vide">Le journal est encore vierge.</p>'}`;
 }
