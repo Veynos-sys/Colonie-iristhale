@@ -83,7 +83,7 @@ function rendreEntete() {
 }
 
 // ---------------------------------------------------------------- Routage
-const PAGES = { village, echoppe, missions, votes, journal, habitants, bestiaire, carnet, fiche };
+const PAGES = { village, region, echoppe, missions, votes, journal, habitants, bestiaire, carnet, fiche };
 
 function rendre() {
   const page = (location.hash.slice(1) || 'village');
@@ -156,7 +156,7 @@ function village() {
 function carteVillage() {
   const c = E.carte;
   if (!c || !c.image_url) {
-    return `<div class="carte-absente parchemin"><p>Le cartographe n'a pas encore achevé le plan du village.</p></div>`;
+    return `<div class="carte-absente parchemin"><p>Il n'y a pas encore de plan du village.</p></div>`;
   }
   const reperes = c.emplacements.map((e, i) => {
     const p = e.projet;
@@ -586,6 +586,162 @@ function fiche() {
   </div>`;
 }
 
+// ---------------------------------------------------------------- Carte de la région
+const TYPES_REPERE = {
+  lieu: { label: 'Lieu', icone: '📍' }, ressource: { label: 'Ressource', icone: '🌿' },
+  danger: { label: 'Danger', icone: '⚠️' }, rumeur: { label: 'Rumeur', icone: '❓' }, autre: { label: 'Autre', icone: '✦' },
+};
+const vue = { z: 1, x: 0, y: 0 };
+const filtresCarte = { lieu: true, ressource: true, danger: true, rumeur: true, autre: true, perso: true };
+
+function region() {
+  const url = E.village?.carte_region_url;
+  const entete = `<h1 class="titre-page">Carte de la région</h1>`;
+  if (!url) return entete + `<div class="carte-absente parchemin"><p>Il n'y a pas encore de carte de la région.</p></div>`;
+  const reperes = E.reperes.filter(r => filtresCarte[r.type] && (!r.prive || filtresCarte.perso));
+  return `${entete}
+  <p class="chapeau">Molette ou pincement pour zoomer, glisser pour vous déplacer. Cliquez sur un endroit pour y poser un repère, pour tout le village ou pour vous seul.</p>
+  <div class="filtres filtres-carte">${Object.entries(TYPES_REPERE).map(([k, t]) =>
+      `<button data-filtre-carte="${k}" class="${filtresCarte[k] ? 'actif' : ''}">${t.icone} ${t.label}</button>`).join('')}
+    <button data-filtre-carte="perso" class="${filtresCarte.perso ? 'actif' : ''}">🔒 Mes repères perso</button></div>
+  <div class="visionneuse" id="visionneuse">
+    <div class="toile" id="toile">
+      <img src="${esc(url)}" alt="Carte de la région" id="img-region" draggable="false">
+      ${reperes.map(r => `<button class="repere-carte ${r.officiel ? 'officiel' : r.prive ? 'perso' : 'village'} type-${r.type}"
+          style="left:${Number(r.x)}%;top:${Number(r.y)}%" data-repere="${r.id}" title="${esc(r.titre)}">
+          <span class="epingle"><i>${r.prive ? '🔒' : TYPES_REPERE[r.type]?.icone || '📍'}</i></span><span class="etiquette">${esc(r.titre)}</span></button>`).join('')}
+    </div>
+    <div class="zoom-btns"><button data-zoom="1.5" aria-label="Zoomer">+</button><button data-zoom="0.66" aria-label="Dézoomer">−</button><button data-zoom="0" aria-label="Recentrer">⟲</button></div>
+  </div>
+  <div class="legende-carte"><span><i class="pastille-leg officiel"></i> Repère officiel (MJ)</span><span><i class="pastille-leg village"></i> Repère du village</span><span><i class="pastille-leg perso"></i> Repère personnel</span></div>`;
+}
+
+function appliquerVue() {
+  const t = $('#toile'); if (!t) return;
+  t.style.transform = `translate(${vue.x}px, ${vue.y}px) scale(${vue.z})`;
+  t.style.setProperty('--z', vue.z);
+}
+function bornerVue() {
+  const v = $('#visionneuse'), t = $('#toile'); if (!v || !t) return;
+  const W = v.clientWidth, H = v.clientHeight, w = t.offsetWidth * vue.z, h = t.offsetHeight * vue.z;
+  vue.x = w <= W ? (W - w) / 2 : Math.min(0, Math.max(W - w, vue.x));
+  vue.y = h <= H ? (H - h) / 2 : Math.min(0, Math.max(H - h, vue.y));
+}
+function zoomer(facteur, cx, cy) {
+  const z2 = Math.min(10, Math.max(1, vue.z * facteur));
+  vue.x = cx - (cx - vue.x) * (z2 / vue.z);
+  vue.y = cy - (cy - vue.y) * (z2 / vue.z);
+  vue.z = z2; bornerVue(); appliquerVue();
+}
+
+function brancherCarte() {
+  const v = $('#visionneuse'); if (!v) return;
+  const img = $('#img-region');
+  // la fenêtre s'ajuste à la hauteur de la carte, sans dépasser 72 % de l'écran
+  const ajuster = () => { v.style.height = Math.min(window.innerHeight * 0.72, $('#toile').offsetHeight || 400) + 'px'; bornerVue(); appliquerVue(); };
+  img.complete ? ajuster() : img.addEventListener('load', ajuster);
+  window.onresize = ajuster;
+
+  v.addEventListener('wheel', ev => {
+    ev.preventDefault();
+    const r = v.getBoundingClientRect();
+    zoomer(ev.deltaY < 0 ? 1.2 : 1 / 1.2, ev.clientX - r.left, ev.clientY - r.top);
+  }, { passive: false });
+
+  const doigts = new Map();
+  let depart = null, bouge = false, pinch = null;
+  v.addEventListener('pointerdown', ev => {
+    if (ev.target.closest('.zoom-btns')) return;
+    v.setPointerCapture(ev.pointerId);
+    doigts.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    if (doigts.size === 1) { depart = { x: ev.clientX, y: ev.clientY, vx: vue.x, vy: vue.y, cible: ev.target }; bouge = false; }
+    if (doigts.size === 2) {
+      const [a, b] = [...doigts.values()];
+      pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: vue.z }; bouge = true;
+    }
+  });
+  v.addEventListener('pointermove', ev => {
+    if (!doigts.has(ev.pointerId)) return;
+    doigts.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    const r = v.getBoundingClientRect();
+    if (doigts.size === 2 && pinch) {
+      const [a, b] = [...doigts.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      zoomer((pinch.z * d / pinch.d) / vue.z, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top);
+      return;
+    }
+    if (!depart) return;
+    const dx = ev.clientX - depart.x, dy = ev.clientY - depart.y;
+    if (Math.hypot(dx, dy) > 5) bouge = true;
+    if (bouge) { vue.x = depart.vx + dx; vue.y = depart.vy + dy; bornerVue(); appliquerVue(); }
+  });
+  const fin = ev => {
+    doigts.delete(ev.pointerId);
+    if (doigts.size < 2) pinch = null;
+    if (doigts.size > 0 || !depart) return;
+    const cible = depart.cible; depart = null;
+    if (bouge || ev.type === 'pointercancel') return;
+    const rep = cible.closest('[data-repere]');
+    if (rep) { ouvrirRepere(rep.dataset.repere); return; }
+    const r = img.getBoundingClientRect();
+    const x = (ev.clientX - r.left) / r.width * 100, y = (ev.clientY - r.top) / r.height * 100;
+    if (x >= 0 && x <= 100 && y >= 0 && y <= 100) formulaireRepere(null, x, y);
+  };
+  v.addEventListener('pointerup', fin);
+  v.addEventListener('pointercancel', fin);
+  v.querySelectorAll('[data-zoom]').forEach(b => b.addEventListener('click', () => {
+    const f = Number(b.dataset.zoom);
+    if (!f) { vue.z = 1; vue.x = 0; vue.y = 0; bornerVue(); appliquerVue(); return; }
+    zoomer(f, v.clientWidth / 2, v.clientHeight / 2);
+  }));
+  contenu.querySelectorAll('[data-filtre-carte]').forEach(b => b.addEventListener('click', () => {
+    filtresCarte[b.dataset.filtreCarte] = !filtresCarte[b.dataset.filtreCarte]; rendre();
+  }));
+}
+
+function ouvrirRepere(id) {
+  const r = E.reperes.find(x => x.id === id); if (!r) return;
+  ficheCourante = null;
+  const t = TYPES_REPERE[r.type] || TYPES_REPERE.autre;
+  const peutModifier = !r.officiel && (!r.prive || r.mien);
+  $('#fenetre-corps').innerHTML = `<p class="meta" style="margin:0">${t.icone} ${t.label} · ${r.officiel ? '<span class="badge cire">Repère officiel du MJ</span>' : r.prive ? '<span class="badge" style="color:#33468A">🔒 Repère personnel, visible de vous seul</span>' : '<span class="badge or">🌐 Repère du village</span>'}</p>
+    <h2>${esc(r.titre)}</h2>
+    ${r.texte ? para(r.texte) : '<p class="vide">Pas de description.</p>'}
+    ${!r.officiel ? `<p class="meta">Posé par ${esc(r.auteur)}${r.modifie_par ? `, modifié par ${esc(r.modifie_par)}` : ''} · ${dateCourte(r.modifie_le)}</p>` : ''}
+    <div class="actions-note">${peutModifier ? '<button class="bouton petit" id="modifier-repere">Modifier</button>' : ''}${r.mien ? '<button class="bouton discret petit" id="retirer-repere">Retirer ce repère</button>' : ''}</div>`;
+  if (!$('#fenetre').open) $('#fenetre').showModal();
+  $('#modifier-repere')?.addEventListener('click', () => formulaireRepere(r));
+  $('#retirer-repere')?.addEventListener('click', async ev => {
+    if (!confirm('Retirer ce repère de la carte ?')) return;
+    await agir('portail_repere_supprimer', { p_id: r.id }, ev.target);
+    $('#fenetre').close();
+  });
+}
+
+function formulaireRepere(r, x, y) {
+  ficheCourante = null;
+  $('#fenetre-corps').innerHTML = `<h2>${r ? 'Modifier le repère' : 'Nouveau repère'}</h2>
+    <form id="form-repere">
+      <label class="champ"><span>Nom</span><input name="titre" required maxlength="80" value="${esc(r?.titre || '')}" placeholder="Ex. : Gué des castors"></label>
+      <label class="champ"><span>Type</span><select name="type">${Object.entries(TYPES_REPERE).map(([k, t]) => `<option value="${k}" ${r?.type === k ? 'selected' : ''}>${t.icone} ${t.label}</option>`).join('')}</select></label>
+      <label class="champ"><span>Ce qu'il faut savoir</span><textarea name="texte" maxlength="2000">${esc(r?.texte || '')}</textarea></label>
+      ${r ? '' : `<fieldset class="choix-visibilite"><legend>Qui le voit ?</legend>
+        <label><input type="radio" name="prive" value="false" checked> 🌐 Tout le village</label>
+        <label><input type="radio" name="prive" value="true"> 🔒 Moi seul</label></fieldset>`}
+      <button class="bouton">${r ? 'Enregistrer' : 'Poser le repère'}</button>
+    </form>`;
+  if (!$('#fenetre').open) $('#fenetre').showModal();
+  $('#form-repere').onsubmit = async ev => {
+    ev.preventDefault(); const f = ev.target;
+    await agir('portail_repere_enregistrer', {
+      p_id: r?.id ?? null, p_type: f.type.value, p_titre: f.titre.value, p_texte: f.texte.value,
+      p_x: r ? null : Math.round(x * 100) / 100, p_y: r ? null : Math.round(y * 100) / 100,
+      p_prive: r ? null : f.prive.value === 'true',
+    }, f.querySelector('button'));
+    if ($('#fenetre').open) $('#fenetre').close();
+  };
+}
+
 // ---------------------------------------------------------------- Interactions
 function ouvrirFenetre(html) {
   $('#fenetre-corps').innerHTML = html;
@@ -593,6 +749,7 @@ function ouvrirFenetre(html) {
 }
 
 function brancher(page) {
+  if (page === 'region') brancherCarte();
   if (page === 'village' || !PAGES[page]) {
     contenu.querySelectorAll('[data-emp]').forEach(b => b.addEventListener('click', () => {
       const e = E.carte.emplacements[b.dataset.emp];

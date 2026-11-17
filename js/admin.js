@@ -221,13 +221,13 @@ const libelle = (table, id) => id && cache[table]?.[id] ? LIBELLES[table](cache[
 // =============================================================== Navigation
 const MENU = [
   ['Suivi', [['tableau', 'Tableau de bord', 'nouveautes'], ['or', 'Or des colons'], ['commandes', 'Commandes', 'commandes']]],
-  ['Le village', [['village', 'Village & jour'], ['cycles', 'Cycles'], ['besoins', 'Besoins'], ['projets', 'Projets'], ['carte', 'Carte du village'], ['scrutins', 'Votes', 'scrutins'], ['navires', 'Navires']]],
+  ['Le village', [['village', 'Village & jour'], ['cycles', 'Cycles'], ['besoins', 'Besoins'], ['projets', 'Projets'], ['carte', 'Plan du village'], ['region', 'Carte de la région'], ['scrutins', 'Votes', 'scrutins'], ['navires', 'Navires']]],
   ['Les gens', [['colons', 'Colons'], ['pnj', 'PNJ'], ['savoirs', 'Savoirs'], ['notes', 'Notes des joueurs']]],
   ['Le monde', [['missions', 'Ordres de mission'], ['journal', 'Journal'], ['bestiaire', 'Bestiaire']]],
   ['Commerce', [['objets', 'Échoppe'], ['catalogue', 'Catalogue D&D 2024'], ['achats', 'Achats']]],
   ['Réglages', [['parametres', 'Paramètres']]],
 ];
-const VUES_SPECIALES = { catalogue: vueCatalogue, tableau: vueTableau, or: vueOr, village: vueVillage, carte: vueCarte, scrutins: vueScrutins, parametres: vueParametres };
+const VUES_SPECIALES = { region: vueRegion, catalogue: vueCatalogue, tableau: vueTableau, or: vueOr, village: vueVillage, carte: vueCarte, scrutins: vueScrutins, parametres: vueParametres };
 
 async function compteurs() {
   const [k, s, n] = await Promise.all([
@@ -480,13 +480,40 @@ async function vueTableau() {
     <div class="bloc" id="nouveautes"></div>
     <h2>Ce qui se passe au village</h2>
     <p class="aide">Toutes les actions des joueurs, y compris celles qu'ils ne voient pas (commandes, fiches). Mise à jour automatique toutes les 30 secondes.</p>
+    <div class="barre-outils" id="outils-fil">
+      <button class="bouton danger petit" id="suppr-selection" disabled>Supprimer la sélection</button>
+      <select id="fil-colon" class="saisie" style="max-width:240px;background:var(--nuit);color:var(--clair)"><option value="">Toute l'activité d'un colon…</option>
+        <option value="__sans">(colons supprimés)</option>
+        ${Object.values(cache.colons).sort((a, b) => a.personnage.localeCompare(b.personnage, 'fr')).map(c => `<option value="${c.id}">${esc(c.personnage)}</option>`).join('')}</select>
+      <button class="bouton danger petit" id="suppr-colon">Supprimer son activité</button>
+      <button class="bouton danger petit" id="vider-fil">Vider tout le fil</button>
+    </div>
     <ul class="fil-admin" id="fil"></ul>`;
   const fil = async () => {
     const { data } = await sb.from('activite').select('*').order('cree_le', { ascending: false }).limit(150);
     const el = $('#fil'); if (!el) return;
-    el.innerHTML = (data || []).map(a => `<li class="${a.public ? '' : 'prive'}"><time>${dateCourte(a.cree_le)}</time><span class="type">${esc(a.type)}${a.public ? '' : ' · privé'}</span><span>${esc(a.message)}</span></li>`).join('')
-      || '<li><span></span><span></span><span class="cache">Aucune activité pour l\'instant.</span></li>';
+    if (el.querySelector('input[name=act]:checked')) return; // ne pas effacer une sélection en cours
+    el.innerHTML = (data || []).map(a => `<li class="${a.public ? '' : 'prive'}"><label class="case-fil"><input type="checkbox" name="act" value="${a.id}"></label><time>${dateCourte(a.cree_le)}</time><span class="type">${esc(a.type)}${a.public ? '' : ' · privé'}</span><span>${esc(a.message)}</span></li>`).join('')
+      || '<li><span></span><span></span><span></span><span class="cache">Aucune activité pour l\'instant.</span></li>';
+    el.querySelectorAll('input[name=act]').forEach(i => i.onchange = () => { $('#suppr-selection').disabled = !el.querySelector('input[name=act]:checked'); });
   };
+  const effacer = async (requete, question) => {
+    if (!confirm(question)) return;
+    const { error } = await requete;
+    if (error) return toast(msgErreur(error), 'erreur');
+    toast('Activité supprimée.'); $('#suppr-selection').disabled = true; $('#fil').innerHTML = ''; fil();
+  };
+  $('#suppr-selection').onclick = () => {
+    const ids = [...document.querySelectorAll('input[name=act]:checked')].map(i => Number(i.value));
+    effacer(sb.from('activite').delete().in('id', ids), `Supprimer ${ids.length} ligne(s) du fil ?`);
+  };
+  $('#suppr-colon').onclick = () => {
+    const v = $('#fil-colon').value;
+    if (!v) return toast('Choisissez d\'abord un colon.', 'erreur');
+    const q = v === '__sans' ? sb.from('activite').delete().is('colon_id', null) : sb.from('activite').delete().eq('colon_id', v);
+    effacer(q, v === '__sans' ? 'Supprimer l\'activité des colons qui n\'existent plus ?' : `Supprimer toute l'activité de ${libelle('colons', v)} ?`);
+  };
+  $('#vider-fil').onclick = () => effacer(sb.from('activite').delete().gte('id', 0), 'Vider entièrement le fil d\'activité ? Les joueurs ne verront plus rien dans « Au camp, ces derniers temps ».');
   await fil();
   await blocNouveautes();
   minuterie = setInterval(fil, 30000);
@@ -732,6 +759,97 @@ async function vueCarte() {
         const { error } = await sb.from('emplacements').update({ x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100 }).eq('id', e.id);
         if (error) toast(msgErreur(error), 'erreur'); else { e.x = x; e.y = y; }
       } else panneau(e);
+    });
+    pt.addEventListener('click', ev => ev.stopPropagation());
+  });
+}
+
+// =============================================================== Carte de la région
+const TYPES_REPERE = { lieu: '📍 Lieu', ressource: '🌿 Ressource', danger: '⚠️ Danger', rumeur: '❓ Rumeur', autre: '✦ Autre' };
+async function vueRegion() {
+  const [{ data: v }, { data: reperes }] = await Promise.all([
+    sb.from('village').select('carte_region_url').eq('id', 1).single(),
+    sb.from('reperes').select('*').order('cree_le'),
+  ]);
+  await lookup('colons', true);
+  const url = v?.carte_region_url;
+  vue.innerHTML = `<h1>Carte de la région</h1>
+    <p class="aide">Téléversez votre carte Inkarnate : elle remplace la précédente. Les repères sont placés en pourcentage de l'image, ils restent en place si vous gardez le même cadrage. Cliquez sur la carte pour poser un repère officiel, cliquez sur un repère pour le modifier, faites-le glisser pour le déplacer. Vous voyez aussi les repères personnels des joueurs (en pointillés).</p>
+    <div class="barre-outils">
+      <label class="bouton" style="cursor:pointer">${url ? 'Remplacer la carte' : 'Téléverser la carte'}<input type="file" id="fichier-region" accept="image/*" hidden></label>
+      ${url ? '<button class="bouton danger petit" id="retirer-region">Retirer la carte</button>' : ''}
+      <span class="cache">${reperes.length} repère(s)</span>
+    </div>
+    ${url ? `<div class="editeur">
+      <div class="plan" id="plan-region"><img src="${esc(url)}" alt="">
+        ${reperes.map(r => `<div class="pt ${r.prive ? 'libre' : ''} ${r.auteur_id ? '' : 'officiel'}" data-id="${r.id}" style="left:${r.x}%;top:${r.y}%" title="${esc(r.titre)}">${esc((TYPES_REPERE[r.type] || '✦').split(' ')[0])}<span>${esc(r.titre)}</span></div>`).join('')}
+      </div>
+      <div class="bloc" id="panneau-repere"><p class="aide" style="margin:0">Cliquez sur la carte ou sur un repère.</p></div>
+    </div>` : '<div class="bloc">Pas encore de carte.</div>'}`;
+
+  $('#fichier-region').onchange = async ev => {
+    const f = ev.target.files[0]; if (!f) return;
+    toast('Envoi de la carte…');
+    try {
+      const lien = await televerser(f, 'region');
+      const { error } = await sb.from('village').update({ carte_region_url: lien }).eq('id', 1);
+      if (error) throw error;
+      toast('Carte de la région mise à jour.'); router();
+    } catch (e) { toast(msgErreur(e), 'erreur'); }
+  };
+  $('#retirer-region')?.addEventListener('click', async () => {
+    if (!confirm('Retirer la carte de la région ? Les repères sont conservés.')) return;
+    await sb.from('village').update({ carte_region_url: null }).eq('id', 1); router();
+  });
+  if (!url) return;
+
+  const plan = $('#plan-region');
+  const pos = ev => { const r = plan.getBoundingClientRect(); return { x: Math.min(100, Math.max(0, (ev.clientX - r.left) / r.width * 100)), y: Math.min(100, Math.max(0, (ev.clientY - r.top) / r.height * 100)) }; };
+  const panneau = (r, nx, ny) => {
+    plan.querySelectorAll('.pt').forEach(p => p.classList.toggle('choisi', p.dataset.id === r?.id));
+    $('#panneau-repere').innerHTML = `<form id="f-repere"><h2 style="margin-top:0">${r ? 'Repère' : 'Nouveau repère officiel'}</h2>
+      ${r ? `<p class="aide" style="margin:0 0 .8em">${r.auteur_id ? `Posé par ${esc(libelle('colons', r.auteur_id))}${r.prive ? ' · <strong>personnel</strong> (lui seul le voit)' : ' · visible du village'}` : 'Repère officiel du MJ'}</p>` : ''}
+      <label class="champ"><span>Nom</span><input name="titre" required value="${esc(r?.titre || '')}"></label>
+      <label class="champ"><span>Type</span><select name="type">${Object.entries(TYPES_REPERE).map(([k, l]) => `<option value="${k}" ${r?.type === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label class="champ"><span>Description</span><textarea name="texte" style="min-height:5em">${esc(r?.texte || '')}</textarea></label>
+      <div class="en-ligne"><button class="bouton">Enregistrer</button>${r ? '<button type="button" class="bouton danger petit" id="suppr-repere">Supprimer</button>' : ''}</div></form>`;
+    $('#f-repere').onsubmit = async ev => {
+      ev.preventDefault(); const f = ev.target;
+      const ligne = { titre: f.titre.value.trim(), type: f.type.value, texte: f.texte.value.trim() || null, modifie_le: new Date().toISOString() };
+      const { error } = r ? await sb.from('reperes').update(ligne).eq('id', r.id)
+        : await sb.from('reperes').insert({ ...ligne, x: nx, y: ny, prive: false, auteur_id: null });
+      if (error) return toast(msgErreur(error), 'erreur');
+      toast('Repère enregistré.'); router();
+    };
+    $('#suppr-repere')?.addEventListener('click', async () => {
+      if (!confirm('Supprimer ce repère ?')) return;
+      await sb.from('reperes').delete().eq('id', r.id); router();
+    });
+  };
+  plan.addEventListener('click', ev => {
+    if (ev.target.closest('.pt')) return;
+    const { x, y } = pos(ev);
+    plan.querySelector('.pt.nouveau')?.remove();
+    const pt = document.createElement('div'); pt.className = 'pt officiel nouveau choisi'; pt.style.left = x + '%'; pt.style.top = y + '%';
+    plan.append(pt);
+    panneau(null, Math.round(x * 100) / 100, Math.round(y * 100) / 100);
+  });
+  plan.querySelectorAll('.pt[data-id]').forEach(pt => {
+    let depart = null, bouge = false;
+    pt.addEventListener('pointerdown', ev => { ev.stopPropagation(); depart = { x: ev.clientX, y: ev.clientY }; bouge = false; pt.setPointerCapture(ev.pointerId); });
+    pt.addEventListener('pointermove', ev => {
+      if (!depart) return;
+      if (Math.hypot(ev.clientX - depart.x, ev.clientY - depart.y) > 4) bouge = true;
+      if (bouge) { const { x, y } = pos(ev); pt.style.left = x + '%'; pt.style.top = y + '%'; }
+    });
+    pt.addEventListener('pointerup', async ev => {
+      if (!depart) return; depart = null;
+      const r = reperes.find(x => x.id === pt.dataset.id);
+      if (bouge) {
+        const { x, y } = pos(ev);
+        const { error } = await sb.from('reperes').update({ x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100 }).eq('id', r.id);
+        if (error) toast(msgErreur(error), 'erreur');
+      } else panneau(r);
     });
     pt.addEventListener('click', ev => ev.stopPropagation());
   });
