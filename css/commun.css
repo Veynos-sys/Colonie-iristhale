@@ -1,0 +1,65 @@
+/* Identité reprise de la lettre de recrutement de la Compagnie du Levant */
+:root{
+  --nuit-haut:#11142A; --nuit:#1C2140; --nuit-clair:#262C52; --crepuscule:#3B3453; --braise:#6A4B58;
+  --mer:#0E1022; --papier:#E2D9C4; --papier-sombre:#D4C8AC; --encre:#2B211B; --encre-douce:#5B4A38;
+  --cire:#6B1E28; --cire-vive:#822834; --or:#D4B06A; --or-pale:#EBD7A6;
+  --clair:#DCD8E6; --doux:#A9A6BD;
+  --vert:#5E7F4E; --ambre:#B9822F; --rouge:#9B3A3A;
+  --ancien:"IM Fell English","Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --texte:"Spectral",Georgia,"Times New Roman",serif;
+  --plume:"Herr Von Muellerhoff","Brush Script MT",cursive;
+  --grain:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .32 0 0 0 0 .24 0 0 0 0 .16 0 0 0 .12 0'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>");
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--mer);color:var(--clair);font-family:var(--texte);font-size:16px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+h1,h2,h3,h4{font-family:var(--ancien);font-weight:400;line-height:1.2;margin:0}
+a{color:var(--or-pale)}
+button,input,select,textarea{font:inherit}
+img{max-width:100%}
+[hidden]{display:none!important}
+
+/* Parchemin */
+.parchemin{color:var(--encre);background-color:var(--papier);
+  background-image:radial-gradient(ellipse at 50% 45%,rgba(0,0,0,0) 55%,rgba(110,80,40,.2) 100%),var(--grain);
+  border-radius:2px;box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 14px 30px rgba(0,0,0,.45),0 2px 6px rgba(0,0,0,.3)}
+.parchemin a{color:var(--cire)}
+
+/* Boutons */
+.bouton{display:inline-flex;align-items:center;justify-content:center;gap:.4em;font-family:var(--ancien);font-size:1.05rem;
+  color:#F3DFAA;background:var(--cire);border:1px solid var(--or);border-radius:3px;padding:.5em 1.15em;cursor:pointer;
+  text-decoration:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 6px 14px rgba(0,0,0,.3);transition:background .15s ease}
+.bouton:hover{background:var(--cire-vive)}
+.bouton:disabled{opacity:.45;cursor:not-allowed}
+.bouton.petit{font-size:.92rem;padding:.3em .8em}
+.bouton.discret{background:transparent;color:var(--or-pale);border-color:rgba(212,176,106,.5);box-shadow:none}
+.bouton.discret:hover{background:rgba(212,176,106,.1)}
+.parchemin .bouton.discret{color:var(--cire);border-color:rgba(107,30,40,.45)}
+.parchemin .bouton.discret:hover{background:rgba(107,30,40,.07)}
+.bouton:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--or);outline-offset:2px}
+
+/* Champs */
+.champ{display:block;margin:0 0 .9em}
+.champ>span{display:block;font-size:.85rem;margin-bottom:.25em;opacity:.85}
+.champ input,.champ select,.champ textarea,input.saisie,select.saisie,textarea.saisie{width:100%;padding:.5em .65em;border-radius:3px;
+  border:1px solid rgba(43,33,27,.35);background:rgba(255,255,255,.55);color:var(--encre)}
+.champ textarea,textarea.saisie{min-height:7em;resize:vertical;line-height:1.5}
+
+/* Étiquettes */
+.badge{display:inline-block;font-family:var(--texte);font-size:.76rem;letter-spacing:.02em;padding:.1em .55em;border-radius:20px;
+  border:1px solid currentColor;white-space:nowrap;vertical-align:middle}
+.badge.vert{color:var(--vert)} .badge.ambre{color:var(--ambre)} .badge.rouge{color:var(--rouge)} .badge.cire{color:var(--cire)}
+.badge.or{color:var(--or)} .badge.gris{color:#7d7365}
+
+/* Notifications */
+#toasts{position:fixed;right:16px;bottom:16px;z-index:100;display:flex;flex-direction:column;gap:8px;max-width:min(92vw,380px)}
+.toast{padding:.75em 1em;border-radius:4px;background:var(--nuit);border:1px solid var(--or);color:var(--clair);
+  box-shadow:0 10px 24px rgba(0,0,0,.5);transition:opacity .4s ease,transform .4s ease}
+.toast-erreur{border-color:#C0545C;background:#2A1520}
+.toast.sortie{opacity:0;transform:translateY(8px)}
+
+.vide{opacity:.7;font-style:italic}
+.chargement{text-align:center;padding:4em 1em;font-family:var(--ancien);font-style:italic;color:var(--doux)}
+
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}

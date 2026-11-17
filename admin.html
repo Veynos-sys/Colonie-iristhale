@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Admin · Registre de la colonie</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg stroke='%23822834' stroke-width='7' stroke-linecap='round' fill='none'%3E%3Cpath d='M12 64H88'/%3E%3Cpath d='M30 64A20 20 0 0 1 70 64Z' fill='%23822834'/%3E%3Cpath d='M50 32V20M73 41l7-7M27 41l-7-7'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Spectral:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/commun.css">
+<link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+
+<section id="connexion" class="connexion" hidden>
+  <form id="form-connexion" class="parchemin boite">
+    <img src="assets/sceau-128.png" alt="" width="72" height="72">
+    <h1>Cabinet du MJ</h1>
+    <label class="champ"><span>E-mail</span><input name="email" type="email" required autocomplete="username"></label>
+    <label class="champ"><span>Mot de passe</span><input name="mdp" type="password" required minlength="8" autocomplete="current-password"></label>
+    <div class="actions">
+      <button class="bouton" type="submit" data-mode="entrer">Entrer</button>
+      <button class="bouton discret" type="submit" data-mode="creer">Créer mon compte</button>
+    </div>
+    <button class="lien" type="button" id="oubli">Mot de passe oublié ?</button>
+    <p id="connexion-msg" class="msg" role="alert"></p>
+  </form>
+</section>
+
+<div id="admin" class="admin" hidden>
+  <aside class="menu">
+    <div class="menu-tete"><img src="assets/sceau-128.png" alt="" width="34" height="34"><strong>Cabinet du MJ</strong></div>
+    <nav id="menu"></nav>
+    <div class="menu-pied">
+      <a href="./" target="_blank" rel="noopener">Ouvrir le portail ↗</a>
+      <span id="qui"></span>
+      <button id="deconnexion" class="bouton discret petit" type="button">Se déconnecter</button>
+    </div>
+  </aside>
+  <main id="vue" class="vue"></main>
+</div>
+
+<dialog id="modale" class="modale"><div id="modale-corps"></div></dialog>
+
+<script type="module" src="js/admin.js"></script>
+</body>
+</html>
