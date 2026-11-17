@@ -74,6 +74,9 @@ function rendreEntete() {
   $('#horloge').textContent = [`Jour ${v.jour_actuel ?? '?'}`, cy ? `Cycle ${cy.numero}` : null, v.palier].filter(Boolean).join(' · ');
   $('#solde').innerHTML = poHTML(E.moi.solde);
   $('#nom-moi').textContent = E.moi.personnage;
+  $('#avatar').innerHTML = E.moi.portrait_url
+    ? `<img src="${esc(E.moi.portrait_url)}" alt="">` : `<span>${esc((E.moi.personnage || '?').trim()[0] || '?')}</span>`;
+  $('#avatar').title = E.moi.personnage;
   const aVoter = E.scrutins.filter(s => s.statut === 'ouvert' && !s.mon_choix).length;
   $('#pastille-votes').hidden = !aVoter;
   $('#pastille-votes').textContent = aVoter;
@@ -139,8 +142,12 @@ function village() {
       </div>
 
       ${E.journal.length ? `<div class="panneau">
-        <h3>Dernières pages du journal</h3>
-        <ul class="fil">${E.journal.slice(0, 4).map(j => `<li><time>${j.jour ? `Jour ${esc(j.jour)}` : dateCourte(j.cree_le)}</time><a href="#journal">${esc(j.titre)}</a></li>`).join('')}</ul>
+        <h3>Ce qui s'est passé ces derniers temps</h3>
+        ${E.journal.slice(0, 4).map(j => `<a href="#journal" class="encart encart-${j.type}">
+          <span class="encart-type">${{ rapport: '📜 Rapport', evenement: '⚡ Événement', annonce: '📣 Annonce' }[j.type] || ''}${j.jour ? ` · jour ${esc(j.jour)}` : ''}</span>
+          <strong>${esc(j.titre)}</strong>
+          ${j.contenu ? `<span class="encart-extrait">${esc(j.contenu.length > 140 ? j.contenu.slice(0, 140).replace(/\s+\S*$/, '') + '…' : j.contenu)}</span>` : ''}
+        </a>`).join('')}
       </div>` : ''}
     </aside>
   </div>`;
@@ -161,11 +168,12 @@ function carteVillage() {
 }
 
 function besoin(b) {
-  const e = ETATS_BESOIN[b.etat] || ETATS_BESOIN.non_couvert;
-  return `<div class="besoin parchemin" data-niveau="${e.niveau}">
+  const e = ETATS_BESOIN[b.etat] || ETATS_BESOIN.insuffisant;
+  const mot = (b.libelles && b.libelles[b.etat]) || e.label;
+  return `<div class="besoin parchemin" data-etat="${b.etat}" data-niveau="${e.niveau}">
     <div class="besoin-tete"><span class="ico" aria-hidden="true">${esc(b.icone || '•')}</span><h3>${esc(b.nom)}</h3></div>
-    <div class="jauge" aria-hidden="true"><i></i><i></i></div>
-    <span class="etat">${e.label}</span>${b.provisoire ? '<span class="ancre" title="Ne tient que grâce aux navires de la Compagnie">⚓ grâce aux navires</span>' : ''}
+    <div class="jauge" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <span class="etat">${esc(mot)}</span>${b.provisoire ? '<span class="ancre" title="Ne tient que grâce aux navires de la Compagnie">⚓ grâce aux navires</span>' : ''}
     ${b.note ? `<p class="note">${esc(b.note)}</p>` : b.description ? `<p class="note">${esc(b.description)}</p>` : ''}
   </div>`;
 }
@@ -256,10 +264,15 @@ function echoppe() {
 }
 
 // Description officielle : première phrase visible, la suite dépliable
+// Description officielle : un premier paragraphe (2 à 3 phrases), puis un bouton pour le reste
 function texteObjet(t) {
-  const m = t.match(/^(.{20,230}?[.!?])\s+(.*)$/s);
-  if (!m) return `<span class="texte-objet">${esc(t)}</span>`;
-  return `<span class="texte-objet">${esc(m[1])}</span><details class="suite-objet"><summary>Lire la suite</summary><span class="texte-objet">${esc(m[2])}</span></details>`;
+  const phrases = t.match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g) || [t];
+  let debut = '';
+  let i = 0;
+  while (i < phrases.length && (debut.length < 220 || i < 1)) debut += phrases[i++];
+  const reste = phrases.slice(i).join('').trim();
+  if (!reste) return `<span class="texte-objet">${esc(t)}</span>`;
+  return `<span class="texte-objet">${esc(debut.trim())}</span><details class="suite-objet"><summary><span class="bouton-suite">Afficher la suite</span></summary><span class="texte-objet">${esc(reste)}</span></details>`;
 }
 
 function missions() {
@@ -327,7 +340,7 @@ function journal() {
   <h1 class="titre-page">Le journal du village</h1>
   <p class="chapeau">Rapports d'expédition et événements du camp, du plus récent au plus ancien.</p>
   <div class="filtres">${[['tout', 'Tout'], ...Object.entries(TYPES_JOURNAL)].map(([k, l]) => `<button data-filtre="${k}" class="${filtreJournal === k ? 'actif' : ''}">${l}</button>`).join('')}</div>
-  ${liste.map(j => `<article class="entree-journal parchemin">
+  ${liste.map(j => `<article class="entree-journal parchemin type-${j.type}">
     <p class="meta" style="margin:0">${j.jour ? `Jour ${esc(j.jour)} · ` : ''}${TYPES_JOURNAL[j.type]}${j.auteur ? ` · ${esc(j.auteur)}` : ''}</p>
     <h3>${esc(j.titre)}</h3>
     <div class="corps">${para(j.contenu)}</div>

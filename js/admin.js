@@ -30,10 +30,14 @@ const ENTITES = {
     colonnes: ['icone', 'nom', 'etat', 'provisoire', 'visible'],
     champs: [
       { n: 'nom', l: 'Nom', req: true }, { n: 'icone', l: 'Icône (émoji)' },
-      { n: 'etat', l: 'État', t: 'choix', o: ETAT_B, d: 'non_couvert' },
+      { n: 'etat', l: 'Palier', t: 'choix', o: ETAT_B, d: 'insuffisant' },
       { n: 'provisoire', l: 'Couvert seulement grâce aux navires', t: 'bool' },
       { n: 'note', l: 'Note visible (pourquoi cet état)', t: 'long' },
       { n: 'description', l: 'Description', t: 'long' },
+      { n: 'libelle_insuffisant', l: 'Mot pour « Insuffisant » (facultatif)', indice: 'Laissez vide pour garder le mot par défaut. Utile pour un besoin d\'un autre genre (ex. « Personne » pour un herboriste).' },
+      { n: 'libelle_precaire', l: 'Mot pour « Précaire » (facultatif)' },
+      { n: 'libelle_suffisant', l: 'Mot pour « Suffisant » (facultatif)' },
+      { n: 'libelle_abondant', l: 'Mot pour « Abondant » (facultatif)' },
       { n: 'ordre', l: 'Ordre d\'affichage', t: 'nombre', d: 0 }, { n: 'visible', l: 'Visible des joueurs', t: 'bool', d: true },
     ],
   },
@@ -182,8 +186,9 @@ const ENTITES = {
     ],
   },
   journal: {
-    titre: 'Journal', table: 'journal', tri: ['cree_le', false],
-    colonnes: ['jour', 'type', 'titre', 'auteur', 'visible'],
+    titre: 'Journal', table: 'journal', tri: ['cree_le', false], fleches: true,
+    aide: 'Les entrées sont classées du jour le plus récent au plus ancien. Pour un même jour, utilisez les flèches ↑ ↓ pour choisir laquelle apparaît en premier chez les joueurs.',
+    colonnes: ['ordre_jour', 'jour', 'type', 'titre', 'auteur', 'visible'],
     champs: [
       { n: 'titre', l: 'Titre', req: true }, { n: 'type', l: 'Type', t: 'choix', o: TYPES_JOURNAL, d: 'evenement' },
       { n: 'jour', l: 'Jour', t: 'nombre' }, { n: 'auteur', l: 'Auteur' },
@@ -267,6 +272,7 @@ async function chargerLiens(ent) {
 function cellule(ent, ligne, col) {
   const v = ligne[col];
   const ch = ent.champs.find(c => c.n === col) || {};
+  if (col === 'ordre_jour') return `<span style="white-space:nowrap"><button class="bouton discret petit" data-deplacer="-1" data-id="${ligne.id}" title="Monter">↑</button> <button class="bouton discret petit" data-deplacer="1" data-id="${ligne.id}" title="Descendre">↓</button></span>`;
   if (col === 'inscriptions') return v?.length ? v.map(i => esc(libelle('colons', i.colon_id))).join(', ') : '<span class="cache">aucun</span>';
   if (col === 'colon_id' && ent.table === 'achats') return esc(libelle('colons', v));
   if (col === 'cree_le' || col === 'modifie_le') return `<span style="white-space:nowrap">${dateCourte(v)}</span>`;
@@ -287,8 +293,9 @@ async function vueListe(cle) {
   if (ent.tri) q = q.order(ent.tri[0], { ascending: ent.tri[1], nullsFirst: false });
   const { data, error } = await q;
   if (error) throw error;
+  if (ent.fleches) data.sort((a, b) => ((b.jour ?? -1e9) - (a.jour ?? -1e9)) || (a.ordre - b.ordre) || (new Date(b.cree_le) - new Date(a.cree_le)));
 
-  const enTete = c => (ent.champs.find(x => x.n === c)?.l) || { cree_le: 'Date', modifie_le: 'Date', cible: 'Sur', inscriptions: 'Volontaires', colon_id: 'Colon', nom_objet: 'Objet', quantite: 'Qté', prix_total: 'Total' }[c] || c;
+  const enTete = c => (ent.champs.find(x => x.n === c)?.l) || { ordre_jour: 'Ordre', cree_le: 'Date', modifie_le: 'Date', cible: 'Sur', inscriptions: 'Volontaires', colon_id: 'Colon', nom_objet: 'Objet', quantite: 'Qté', prix_total: 'Total' }[c] || c;
   const dessiner = filtre => {
     const lignes = data.filter(r => !filtre || JSON.stringify(r).toLowerCase().includes(filtre) ||
       ent.colonnes.some(c => cellule(ent, r, c).toLowerCase().includes(filtre)));
@@ -296,7 +303,19 @@ async function vueListe(cle) {
       ${ent.colonnes.map(c => `<td>${cellule(ent, r, c)}</td>`).join('')}</tr>`).join('')
       || `<tr><td colspan="${ent.colonnes.length}" class="cache">Rien pour l'instant.</td></tr>`;
     if (!ent.lectureSeule) $('#tbody').querySelectorAll('tr[data-id]').forEach(tr =>
-      tr.addEventListener('click', () => editer(cle, data.find(r => r.id === tr.dataset.id))));
+      tr.addEventListener('click', ev => { if (!ev.target.closest('[data-deplacer]')) editer(cle, data.find(r => r.id === tr.dataset.id)); }));
+    $('#tbody').querySelectorAll('[data-deplacer]').forEach(b => b.addEventListener('click', async ev => {
+      ev.stopPropagation();
+      const ligne = data.find(r => r.id === b.dataset.id);
+      const memeJour = data.filter(r => (r.jour ?? null) === (ligne.jour ?? null));
+      const i = memeJour.indexOf(ligne), j = i + Number(b.dataset.deplacer);
+      if (j < 0 || j >= memeJour.length) return;
+      [memeJour[i], memeJour[j]] = [memeJour[j], memeJour[i]];
+      const res = await Promise.all(memeJour.map((r, k) => sb.from(ent.table).update({ ordre: k }).eq('id', r.id)));
+      const err = res.find(r => r.error);
+      if (err) return toast(msgErreur(err.error), 'erreur');
+      router();
+    }));
   };
 
   vue.innerHTML = `<h1>${ent.titre}</h1>${ent.aide ? `<p class="aide">${esc(ent.aide)}</p>` : ''}

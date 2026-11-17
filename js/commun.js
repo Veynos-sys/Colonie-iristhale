@@ -87,9 +87,10 @@ export function msgErreur(e) {
 }
 
 export const ETATS_BESOIN = {
-  non_couvert: { label: 'Non couvert', niveau: 0 },
-  precaire: { label: 'Précaire', niveau: 1 },
-  assure: { label: 'Assuré', niveau: 2 },
+  insuffisant: { label: 'Insuffisant', niveau: 1 },
+  precaire: { label: 'Précaire', niveau: 2 },
+  suffisant: { label: 'Suffisant', niveau: 3 },
+  abondant: { label: 'Abondant', niveau: 4 },
 };
 export const STATUTS_PROJET = {
   verrouille: 'Verrouillé', disponible: 'Disponible', en_vote: 'Soumis au vote',
