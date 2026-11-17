@@ -60,6 +60,19 @@ img{max-width:100%}
 .toast.sortie{opacity:0;transform:translateY(8px)}
 
 .vide{opacity:.7;font-style:italic}
+
+/* Pièces */
+.bourse-pieces{white-space:nowrap}
+.piece{white-space:nowrap}
+.piece::before{content:"";display:inline-block;width:.72em;height:.72em;border-radius:50%;margin-right:.22em;vertical-align:-.04em;
+  box-shadow:inset -1px -1px 0 rgba(0,0,0,.25),inset 1px 1px 0 rgba(255,255,255,.45)}
+.piece.or::before{background:#D9AE3E}
+.piece.argent::before{background:#B9BFC9}
+.piece.cuivre::before{background:#B8693A}
+.monnaie-cases{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.monnaie-cases label{display:flex;align-items:center;gap:5px}
+.monnaie-cases input{width:5.2em!important}
+.monnaie-cases select{width:auto!important}
 .chargement{text-align:center;padding:4em 1em;font-family:var(--ancien);font-style:italic;color:var(--doux)}
 
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}

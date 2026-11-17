@@ -23,6 +23,7 @@
 .moi{display:flex;align-items:center;gap:12px;flex-shrink:0}
 .bourse{font-size:.95rem;white-space:nowrap}
 .bourse strong{color:var(--or-pale);font-weight:600}
+.bourse .piece{margin-left:.35em}
 .nom-moi{font-family:var(--ancien);text-decoration:none;color:var(--clair)}
 .onglets{max-width:1200px;margin:0 auto;display:flex;gap:2px;padding:0 10px;overflow-x:auto;scrollbar-width:none}
 .onglets::-webkit-scrollbar{display:none}
@@ -189,10 +190,49 @@
 .registre time{font-size:.8rem;color:var(--encre-douce)}
 
 /* ---------- Fenêtre ---------- */
-.fenetre{width:min(94vw,620px);max-height:88vh;border:0;padding:26px 26px 18px;overflow:auto}
+.fenetre{width:min(94vw,680px);max-height:88vh;border:0;padding:26px 26px 18px;overflow:auto}
 .fenetre::backdrop{background:rgba(8,9,20,.72)}
 .fenetre h2{font-size:1.8rem;color:var(--encre)}
 .fenetre .fermer{display:block;margin:16px 0 0 auto}
 .fenetre-tete{display:flex;gap:16px;align-items:center;margin-bottom:12px}
 
 .liens-mission{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+
+/* ---------- Actions et ajouts ---------- */
+.barre-actions{display:flex;gap:10px;flex-wrap:wrap;margin:-.6em 0 .4em}
+button.creature{display:block;width:100%;padding:0;border:0;text-align:left;cursor:pointer;font:inherit}
+button.creature:hover,button.personne:hover{transform:translateY(-1px)}
+.creature .apercu,.personne .apercu{font-size:.9rem;margin:.3em 0 0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+
+/* ---------- Savoirs : village, secret, personnel ---------- */
+.bloc-savoir{margin:1.2em 0 0;padding:14px 16px;border-radius:4px}
+.bloc-savoir h3{font-size:1.25rem;margin:0}
+.consigne-bloc{font-size:.82rem;font-style:italic;margin:.15em 0 .6em;opacity:.85}
+.bloc-savoir.village{background:rgba(255,255,255,.35);border:1px solid rgba(43,33,27,.25)}
+.bloc-savoir.secret{background:rgba(107,30,40,.08);border:1px solid rgba(107,30,40,.35)}
+.bloc-savoir.perso{color:#1F2B55;border:1px solid #9AA8CF;border-left:4px solid #B74A4A;
+  background-color:#F1F3FA;background-image:repeating-linear-gradient(to bottom,transparent 0 23px,rgba(70,100,170,.18) 23px 24px)}
+.bloc-savoir.perso h3{color:#1F2B55}
+.savoirs li.officiel::before{content:"✦"}
+.savoirs li.joueur::before{content:"🌐";font-size:.75em}
+.notes-perso{list-style:none;margin:0;padding:0}
+.notes-perso li{padding:.45em 0;border-top:1px dashed rgba(31,43,85,.25);font-family:var(--texte)}
+.notes-perso li:first-child{border-top:0}
+.notes-perso .qui{display:block;font-size:.76rem;opacity:.75;font-style:italic}
+.texte-note{white-space:pre-wrap}
+.actions-note{display:flex;gap:12px;align-items:center;margin-top:.25em}
+.lien-note{background:none;border:0;padding:0;font:inherit;font-size:.8rem;color:var(--cire);text-decoration:underline;cursor:pointer}
+.perso .lien-note{color:#33468A}
+.form-note{margin-top:.7em}
+.form-note textarea,.edition-note textarea{width:100%;min-height:4.5em;padding:.45em .6em;border-radius:3px;border:1px solid rgba(43,33,27,.3);background:rgba(255,255,255,.7);color:inherit;font:inherit;resize:vertical}
+.form-note .bouton{margin-top:.4em}
+
+/* ---------- Carnet ---------- */
+.carnet-liste{display:grid;gap:14px;align-content:start}
+.page-carnet{padding:18px 20px;border-radius:3px;color:#1F2B55;border-left:4px solid #B74A4A;
+  background-color:#F1F3FA;background-image:repeating-linear-gradient(to bottom,transparent 0 25px,rgba(70,100,170,.18) 25px 26px);
+  box-shadow:0 10px 24px rgba(0,0,0,.35)}
+.page-carnet h3{font-size:1.25rem;color:#1F2B55;margin-bottom:.5em}
+.page-carnet time{font-size:.8rem;opacity:.7}
+.page-carnet .champ input,.page-carnet .champ textarea{background:rgba(255,255,255,.75);border-color:#9AA8CF;color:#1F2B55}
+.page-carnet .lien-note{color:#33468A}

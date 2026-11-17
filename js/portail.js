@@ -1,5 +1,5 @@
 import {
-  sb, esc, para, po, dateCourte, toast, msgErreur,
+  sb, esc, para, po, poHTML, dateCourte, toast, msgErreur,
   ETATS_BESOIN, STATUTS_PROJET, STATUTS_MISSION, STATUTS_NAVIRE, STATUTS_COMMANDE, TYPES_JOURNAL, RAYONS,
 } from './commun.js';
 
@@ -59,6 +59,7 @@ async function agir(nom, args, bouton) {
     const r = await rpc(nom, args);
     toast(r?.message || 'C\'est fait.');
     await charger();
+    if (ficheCourante && $('#fenetre').open) ouvrirFiche(ficheCourante.type, ficheCourante.id);
   } catch (e) {
     toast(msgErreur(e), 'erreur');
     if (bouton) bouton.disabled = false;
@@ -71,7 +72,7 @@ function rendreEntete() {
   $('#nom-village').textContent = v.nom || 'Le camp';
   const cy = E.cycle;
   $('#horloge').textContent = [`Jour ${v.jour_actuel ?? '?'}`, cy ? `Cycle ${cy.numero}` : null, v.palier].filter(Boolean).join(' · ');
-  $('#solde').textContent = po(E.moi.solde);
+  $('#solde').innerHTML = poHTML(E.moi.solde);
   $('#nom-moi').textContent = E.moi.personnage;
   const aVoter = E.scrutins.filter(s => s.statut === 'ouvert' && !s.mon_choix).length;
   $('#pastille-votes').hidden = !aVoter;
@@ -79,7 +80,7 @@ function rendreEntete() {
 }
 
 // ---------------------------------------------------------------- Routage
-const PAGES = { village, echoppe, missions, votes, journal, habitants, bestiaire, fiche };
+const PAGES = { village, echoppe, missions, votes, journal, habitants, bestiaire, carnet, fiche };
 
 function rendre() {
   const page = (location.hash.slice(1) || 'village');
@@ -198,7 +199,7 @@ function echoppe() {
   const peutPayer = prix => Number(E.moi.solde) >= Number(prix);
   const ligne = o => `<tr>
     <td>${esc(o.nom)}${o.description ? `<span class="desc">${esc(o.description)}</span>` : ''}</td>
-    <td class="prix">${po(o.prix)}</td>
+    <td class="prix">${poHTML(o.prix)}</td>
     <td class="stock">${o.stock === null ? '' : o.stock > 0 ? `Reste ${o.stock}` : '<span class="badge rouge">Épuisé</span>'}</td>
     <td class="col-achat"><div class="achat">
       ${o.stock === 0 ? '' : `<input type="number" min="1" max="${o.stock ?? 50}" value="1" aria-label="Quantité" data-qte="${o.id}">
@@ -225,7 +226,7 @@ function echoppe() {
   <div class="jasmine parchemin">
     ${jasmine?.portrait_url ? `<img class="portrait" src="${esc(jasmine.portrait_url)}" alt="">` : '<div class="portrait" aria-hidden="true">J</div>'}
     <div><blockquote>« Approchez, approchez ! Le dernier navire m'a laissé quelques merveilles, et je ne les garderai pas longtemps. »</blockquote>
-    <p class="meta" style="margin:.4em 0 0">Votre bourse : <strong>${po(E.moi.solde)}</strong></p></div>
+    <p class="meta" style="margin:.4em 0 0">Votre bourse : <strong>${poHTML(E.moi.solde)}</strong></p></div>
   </div>
 
   <h2 class="titre-section">Arrivage${E.cycle ? ` du cycle ${esc(E.cycle.numero)}` : ''} <small>en quantité limitée, premier arrivé, premier servi</small></h2>
@@ -244,7 +245,7 @@ function echoppe() {
     <div class="parchemin carte-p">
       <h3>Mes commandes</h3>
       ${E.moi.commandes.length ? E.moi.commandes.map(k => `<p><span class="badge ${k.statut === 'refusee' ? 'rouge' : k.statut === 'livree' ? 'vert' : 'or'}">${STATUTS_COMMANDE[k.statut]}</span>
-        ${esc(k.demande)}${k.prix ? ` · <strong>${po(k.prix)}</strong>` : ''}${k.reponse ? `<br><span class="meta">${esc(k.reponse)}</span>` : ''}</p>`).join('') : '<p class="vide">Aucune commande.</p>'}
+        ${esc(k.demande)}${k.prix ? ` · <strong>${poHTML(k.prix)}</strong>` : ''}${k.reponse ? `<br><span class="meta">${esc(k.reponse)}</span>` : ''}</p>`).join('') : '<p class="vide">Aucune commande.</p>'}
     </div>
   </div>`;
 }
@@ -329,48 +330,198 @@ function portrait(url, nom, grand = false) {
 }
 
 function habitants() {
-  const carte = (p, type) => `<button class="personne parchemin" data-${type}="${p.id}">
+  const carte = (p, type) => `<button class="personne parchemin" data-sujet="${type}" data-id="${p.id}">
     ${portrait(p.portrait_url, type === 'pnj' ? p.nom : p.personnage)}
     <div><h3>${esc(type === 'pnj' ? p.nom : p.personnage)}</h3>
-      <p class="role">${type === 'pnj' ? esc(p.role || '') : [p.espece, p.classe, p.niveau ? `niv. ${p.niveau}` : null].filter(Boolean).map(esc).join(' · ')}${p.statut && p.statut !== 'vivant' ? ` · <span class="badge rouge">${esc(p.statut)}</span>` : ''}</p>
+      <p class="role">${type === 'pnj' ? esc(p.role || '') : [p.espece, p.niveau ? `niv. ${p.niveau}` : null].filter(Boolean).map(esc).join(' · ')}${p.statut && p.statut !== 'vivant' ? ` · <span class="badge rouge">${esc(p.statut)}</span>` : ''}</p>
       ${p.description ? `<p class="apercu">${esc(p.description)}</p>` : ''}
-      ${p.savoirs.length ? `<p class="meta" style="margin:.3em 0 0">✦ ${p.savoirs.length} chose${p.savoirs.length > 1 ? 's' : ''} que vous savez</p>` : ''}
+      <p class="meta" style="margin:.3em 0 0">${resumeSavoirs(p)}</p>
     </div></button>`;
   return `
   <h1 class="titre-page">Les habitants</h1>
-  <p class="chapeau">Qui vit au camp, et ce que vous savez de chacun. Certaines choses ne sont connues que de quelques-uns 🔒.</p>
-  <h2 class="titre-section">Figures du camp</h2>
+  <p class="chapeau">Qui vit au camp ou croise sa route, et ce que vous savez de chacun. Ouvrez une fiche pour lire ce que sait le village, ajouter une information pour tous ou prendre vos propres notes.</p>
+  <div class="barre-actions"><button class="bouton" data-ajouter="pnj">+ Inscrire un personnage rencontré</button></div>
+  <h2 class="titre-section">Figures du camp et rencontres</h2>
   <div class="grille">${E.pnj.map(p => carte(p, 'pnj')).join('') || '<p class="vide">Personne pour l\'instant.</p>'}</div>
   <h2 class="titre-section">Les colons</h2>
   <div class="grille">${E.colons.map(c => carte(c, 'colon')).join('')}</div>`;
 }
 
-function fichePersonne(p, type) {
-  const nom = type === 'pnj' ? p.nom : p.personnage;
-  return `<div class="fenetre-tete">${portrait(p.portrait_url, nom, true)}
-    <div><h2>${esc(nom)}</h2>
-    <p class="meta" style="margin:.2em 0">${type === 'pnj' ? esc(p.role || '') : [p.espece, p.classe, p.niveau ? `niveau ${p.niveau}` : null].filter(Boolean).map(esc).join(' · ')}</p>
-    ${type === 'colon' ? `<p class="meta" style="margin:0">Joué par ${esc(p.joueur)}${p.responsabilite ? ` · ${esc(p.responsabilite)}` : ''}</p>` : ''}</div></div>
+function resumeSavoirs(p) {
+  const n = p.notes || { partagees: [], perso: [] };
+  const village = p.savoirs.filter(s => !s.restreint).length + n.partagees.length;
+  const bouts = [];
+  if (village) bouts.push(`🌐 ${village} info${village > 1 ? 's' : ''} du village`);
+  if (p.savoirs.some(s => s.restreint)) bouts.push('🔒 secret partagé');
+  if (n.perso.length) bouts.push(`✒️ ${n.perso.length} note${n.perso.length > 1 ? 's' : ''} perso`);
+  if (p.ajoute_par) bouts.push(`inscrit par ${esc(p.ajoute_par)}`);
+  return bouts.join(' · ');
+}
+
+// ---------- Fiche d'un PNJ, d'un colon ou d'une créature, avec les notes
+let ficheCourante = null;
+function sujet(type, id) {
+  return (type === 'pnj' ? E.pnj : type === 'colon' ? E.colons : E.bestiaire).find(x => x.id === id);
+}
+function ouvrirFiche(type, id) {
+  ficheCourante = { type, id };
+  const p = sujet(type, id);
+  if (!p) { $('#fenetre').close(); return; }
+  $('#fenetre-corps').innerHTML = ficheSujet(p, type);
+  if (!$('#fenetre').open) $('#fenetre').showModal();
+}
+function ficheSujet(p, type) {
+  const nom = type === 'pnj' ? p.nom : type === 'colon' ? p.personnage : p.nom;
+  const n = p.notes || { partagees: [], perso: [] };
+  const officiels = (p.savoirs || []).filter(s => !s.restreint);
+  const secrets = (p.savoirs || []).filter(s => s.restreint);
+  let tete;
+  if (type === 'creature') {
+    tete = `${p.image_url ? `<img src="${esc(p.image_url)}" alt="" style="width:100%;border-radius:3px;margin-bottom:10px">` : ''}
+      <div class="ligne"><h2>${esc(nom)}</h2>${p.danger ? `<span class="badge cire">${esc(p.danger)}</span>` : ''}</div>
+      <p class="meta" style="margin:.2em 0">${[p.categorie, p.habitat ? `habitat : ${p.habitat}` : null].filter(Boolean).map(esc).join(' · ')}</p>
+      <p class="meta" style="margin:0">${p.decouvert_par ? `Documenté par ${esc(p.decouvert_par)}${p.jour ? `, jour ${esc(p.jour)}` : ''}` : ''}</p>`;
+  } else {
+    tete = `<div class="fenetre-tete">${portrait(p.portrait_url, nom, true)}
+      <div><h2>${esc(nom)}</h2>
+      <p class="meta" style="margin:.2em 0">${type === 'pnj' ? esc(p.role || '') : [p.espece, p.niveau ? `niveau ${p.niveau}` : null].filter(Boolean).map(esc).join(' · ')}</p>
+      ${type === 'colon' ? `<p class="meta" style="margin:0">Joué par ${esc(p.joueur)}${p.responsabilite ? ` · ${esc(p.responsabilite)}` : ''}</p>` : ''}
+      ${p.ajoute_par ? `<p class="meta" style="margin:0">Inscrit au registre par ${esc(p.ajoute_par)}</p>` : ''}</div></div>`;
+  }
+  return `${tete}
     ${p.description ? para(p.description) : '<p class="vide">Pas encore de description.</p>'}
-    <h3 style="font-size:1.3rem;margin-top:1em">Ce que vous savez</h3>
-    ${p.savoirs.length ? `<ul class="savoirs">${p.savoirs.map(s => `<li class="${s.restreint ? 'restreint' : ''}">${esc(s.texte)}
-      <span class="qui">${s.restreint ? 'Connu de vous et de quelques autres seulement' : 'Connu de tout le village'}${s.jour ? ` · jour ${esc(s.jour)}` : ''}</span></li>`).join('')}</ul>`
-      : '<p class="vide">Rien de particulier.</p>'}`;
+
+    <section class="bloc-savoir village">
+      <h3>🌐 Ce que tout le village sait</h3>
+      <p class="consigne-bloc">Visible par tous les colons. Chacun peut compléter ou corriger les informations ajoutées par les joueurs.</p>
+      <ul class="savoirs">
+        ${officiels.map(s => `<li class="officiel">${esc(s.texte)}<span class="qui"><span class="badge cire">Registre du MJ</span>${s.jour ? ` · jour ${esc(s.jour)}` : ''}</span></li>`).join('')}
+        ${n.partagees.map(x => `<li class="joueur" data-note="${x.id}"><span class="texte-note">${esc(x.texte)}</span>
+          <span class="qui">Ajouté par ${esc(x.auteur)}${x.modifie_par ? `, modifié par ${esc(x.modifie_par)}` : ''} · ${dateCourte(x.modifie_le)}</span>
+          <span class="actions-note"><button class="lien-note" data-modifier-note="${x.id}">Modifier</button>${x.mienne ? `<button class="lien-note" data-supprimer-note="${x.id}">Supprimer</button>` : ''}</span></li>`).join('')}
+        ${!officiels.length && !n.partagees.length ? '<li class="vide">Le village ne sait encore rien de particulier.</li>' : ''}
+      </ul>
+      <form class="form-note" data-prive="false">
+        <textarea name="texte" maxlength="4000" placeholder="Ajouter une information que tout le village saura…" required></textarea>
+        <button class="bouton petit" type="submit">🌐 Partager avec le village</button>
+      </form>
+    </section>
+
+    ${secrets.length ? `<section class="bloc-savoir secret">
+      <h3>🔒 Connu de quelques-uns</h3>
+      <p class="consigne-bloc">Transmis par le MJ à vous et à quelques autres seulement.</p>
+      <ul class="savoirs">${secrets.map(s => `<li class="restreint">${esc(s.texte)}${s.jour ? `<span class="qui">jour ${esc(s.jour)}</span>` : ''}</li>`).join('')}</ul>
+    </section>` : ''}
+
+    <section class="bloc-savoir perso">
+      <h3>✒️ Mes notes personnelles</h3>
+      <p class="consigne-bloc">Visibles de vous seul (et du MJ). Les autres colons ne les voient pas.</p>
+      <ul class="notes-perso">${n.perso.map(x => `<li data-note="${x.id}"><span class="texte-note">${esc(x.texte)}</span>
+        <span class="qui">${dateCourte(x.modifie_le)}</span>
+        <span class="actions-note"><button class="lien-note" data-modifier-note="${x.id}">Modifier</button><button class="lien-note" data-supprimer-note="${x.id}">Supprimer</button></span></li>`).join('')
+        || '<li class="vide">Aucune note pour l\'instant.</li>'}</ul>
+      <form class="form-note" data-prive="true">
+        <textarea name="texte" maxlength="4000" placeholder="Ce que vous voulez retenir, pour vous seul…" required></textarea>
+        <button class="bouton discret petit" type="submit">✒️ Noter pour moi seul</button>
+      </form>
+    </section>`;
+}
+
+function trouverNote(id) {
+  for (const l of [E.pnj, E.colons, E.bestiaire]) for (const p of l) {
+    const x = [...(p.notes?.partagees || []), ...(p.notes?.perso || [])].find(n => n.id === id);
+    if (x) return x;
+  }
+  return E.carnet.find(n => n.id === id);
+}
+
+// Délégation des actions dans la fenêtre (notes)
+$('#fenetre-corps').addEventListener('submit', ev => {
+  const f = ev.target.closest('.form-note');
+  if (!f || !ficheCourante) return;
+  ev.preventDefault();
+  agir('portail_note_enregistrer', { p_id: null, p_cible_type: ficheCourante.type, p_cible_id: ficheCourante.id,
+    p_texte: f.texte.value, p_prive: f.dataset.prive === 'true' }, f.querySelector('button'));
+});
+document.addEventListener('click', ev => {
+  const m = ev.target.closest('[data-modifier-note]');
+  if (m) {
+    const li = m.closest('li'); const x = trouverNote(m.dataset.modifierNote);
+    li.innerHTML = `<form class="edition-note"><textarea class="saisie" name="texte" maxlength="4000" required>${esc(x.texte)}</textarea>
+      ${x.titre !== undefined ? '' : ''}<div class="actions-note"><button class="bouton petit">Enregistrer</button><button type="button" class="lien-note" data-annuler>Annuler</button></div></form>`;
+    li.querySelector('[data-annuler]').onclick = () => (ficheCourante && $('#fenetre').open ? ouvrirFiche(ficheCourante.type, ficheCourante.id) : rendre());
+    li.querySelector('form').onsubmit = e2 => {
+      e2.preventDefault();
+      agir('portail_note_enregistrer', { p_id: x.id, p_cible_type: null, p_cible_id: null, p_texte: e2.target.texte.value, p_prive: null, p_titre: x.titre ?? null }, e2.target.querySelector('button'));
+    };
+    return;
+  }
+  const d = ev.target.closest('[data-supprimer-note]');
+  if (d) {
+    if (confirm('Supprimer cette note ?')) agir('portail_note_supprimer', { p_id: d.dataset.supprimerNote }, d);
+  }
+});
+$('#fenetre').addEventListener('close', () => { ficheCourante = null; });
+
+function formulaireAjout(type) {
+  ficheCourante = null;
+  $('#fenetre-corps').innerHTML = type === 'pnj' ? `<h2>Inscrire un personnage</h2>
+    <p class="meta">Une personne rencontrée qui n'est pas encore au registre. Tout le village la verra.</p>
+    <form id="form-ajout">
+      <label class="champ"><span>Nom</span><input name="nom" required maxlength="80"></label>
+      <label class="champ"><span>Qui est-ce ? (rôle, lieu de la rencontre)</span><input name="role" maxlength="120"></label>
+      <label class="champ"><span>Description</span><textarea name="description" maxlength="4000"></textarea></label>
+      <button class="bouton">Inscrire au registre</button></form>`
+    : `<h2>Documenter une créature</h2>
+    <p class="meta">Une créature croisée sur Iristhale. Elle entre au bestiaire, à votre nom.</p>
+    <form id="form-ajout">
+      <label class="champ"><span>Nom</span><input name="nom" required maxlength="80"></label>
+      <label class="champ"><span>Type (bête, plante, esprit…)</span><input name="categorie" maxlength="80"></label>
+      <label class="champ"><span>Où l'avez-vous vue ?</span><input name="habitat" maxlength="160"></label>
+      <label class="champ"><span>Danger estimé</span><select name="danger"><option value="">Inconnu</option><option>Inoffensif</option><option>Méfiance</option><option>Dangereux</option><option>Mortel</option></select></label>
+      <label class="champ"><span>Description, comportement, observations</span><textarea name="description" maxlength="4000"></textarea></label>
+      <button class="bouton">Ajouter au bestiaire</button></form>`;
+  $('#fenetre').showModal();
+  $('#form-ajout').onsubmit = async ev => {
+    ev.preventDefault(); const f = ev.target;
+    if (type === 'pnj') await agir('portail_ajouter_pnj', { p_nom: f.nom.value, p_role: f.role.value, p_description: f.description.value }, f.querySelector('button'));
+    else await agir('portail_ajouter_creature', { p_nom: f.nom.value, p_categorie: f.categorie.value, p_habitat: f.habitat.value, p_danger: f.danger.value, p_description: f.description.value }, f.querySelector('button'));
+    if ($('#fenetre').open && !ficheCourante) $('#fenetre').close();
+  };
 }
 
 function bestiaire() {
   return `
   <h1 class="titre-page">Bestiaire d'Iristhale</h1>
-  <p class="chapeau">Les créatures rencontrées et documentées par les colons. Ce qui n'a pas encore été vu n'y figure pas.</p>
-  <div class="grille">${E.bestiaire.map(b => `<article class="creature parchemin">
+  <p class="chapeau">Les créatures rencontrées et documentées par les colons. Ouvrez une fiche pour compléter ce que sait le village ou prendre vos notes.</p>
+  <div class="barre-actions"><button class="bouton" data-ajouter="creature">+ Documenter une créature</button></div>
+  <div class="grille">${E.bestiaire.map(b => `<button class="creature parchemin" data-sujet="creature" data-id="${b.id}">
     ${b.image_url ? `<img src="${esc(b.image_url)}" alt="" loading="lazy">` : ''}
     <div class="carte-p">
       <div class="ligne"><h3>${esc(b.nom)}</h3>${b.danger ? `<span class="badge cire">${esc(b.danger)}</span>` : ''}</div>
       ${b.categorie ? `<p class="meta">${esc(b.categorie)}</p>` : ''}
-      ${b.description ? para(b.description) : ''}
-      <dl>${b.habitat ? `<dt>Habitat</dt><dd>${esc(b.habitat)}</dd>` : ''}
-      ${b.decouvert_par ? `<dt>Documenté par</dt><dd>${esc(b.decouvert_par)}${b.jour ? `, jour ${esc(b.jour)}` : ''}</dd>` : ''}</dl>
-    </div></article>`).join('') || '<p class="vide">Aucune créature documentée pour l\'instant.</p>'}</div>`;
+      ${b.description ? `<p class="apercu">${esc(b.description)}</p>` : ''}
+      <p class="meta" style="margin:.4em 0 0">${b.decouvert_par ? `Documenté par ${esc(b.decouvert_par)}${b.jour ? `, jour ${esc(b.jour)}` : ''}` : ''}${(b.notes?.partagees.length || b.notes?.perso.length) ? ` · ${resumeSavoirs({ savoirs: [], notes: b.notes })}` : ''}</p>
+    </div></button>`).join('') || '<p class="vide">Aucune créature documentée pour l\'instant.</p>'}</div>`;
+}
+
+function carnet() {
+  return `
+  <h1 class="titre-page">Mon carnet</h1>
+  <p class="chapeau">Vos notes de colon : pistes, rendez-vous, soupçons, listes de courses pour l'échoppe… Visibles de vous seul (et du MJ).</p>
+  <div class="deux-colonnes">
+    <div class="carnet-liste">${E.carnet.map(n => `<article class="page-carnet" data-note="${n.id}">
+      <div class="ligne"><h3>${esc(n.titre || 'Sans titre')}</h3><time>${dateCourte(n.modifie_le)}</time></div>
+      <div class="texte-note">${para(n.texte)}</div>
+      <div class="actions-note"><button class="lien-note" data-editer-carnet="${n.id}">Modifier</button><button class="lien-note" data-supprimer-note="${n.id}">Supprimer</button></div>
+    </article>`).join('') || '<p class="vide">Le carnet est vierge.</p>'}</div>
+    <form id="form-carnet" class="page-carnet">
+      <h3>Nouvelle note</h3>
+      <label class="champ"><span>Titre</span><input name="titre" maxlength="120" placeholder="Ex. : Ce que cache Jasmine"></label>
+      <label class="champ"><span>Note</span><textarea name="texte" maxlength="4000" required style="min-height:12em"></textarea></label>
+      <button class="bouton">Ajouter au carnet</button>
+    </form>
+  </div>`;
 }
 
 function fiche() {
@@ -378,7 +529,7 @@ function fiche() {
   return `
   <div class="fiche-tete parchemin">${portrait(m.portrait_url, m.personnage, true)}
     <div><h2>${esc(m.personnage)}</h2>
-    <p class="meta" style="margin:.2em 0">${[m.espece, m.classe, m.niveau ? `niveau ${m.niveau}` : null].filter(Boolean).map(esc).join(' · ')}</p>
+    <p class="meta" style="margin:.2em 0">${[m.espece, m.niveau ? `niveau ${m.niveau}` : null].filter(Boolean).map(esc).join(' · ')}</p>
     <p style="margin:.2em 0">Joué par ${esc(m.joueur)}${m.responsabilite ? ` · <strong>${esc(m.responsabilite)}</strong>` : ''}</p></div>
   </div>
   <div class="deux-colonnes">
@@ -390,10 +541,10 @@ function fiche() {
       <button class="bouton" type="submit">Enregistrer</button>
     </form>
     <div class="parchemin carte-p">
-      <div class="ligne"><h3>Ma bourse</h3><strong style="font-size:1.3rem">🪙 ${po(m.solde)}</strong></div>
+      <div class="ligne"><h3>Ma bourse</h3><strong style="font-size:1.3rem">${poHTML(m.solde)}</strong></div>
       <table class="registre">${m.transactions.map(t => `<tr>
         <td>${esc(t.motif)}<br><time>${dateCourte(t.cree_le)}</time></td>
-        <td class="montant ${Number(t.montant) >= 0 ? 'credit' : 'debit'}">${Number(t.montant) >= 0 ? '+' : ''}${po(t.montant)}</td></tr>`).join('')
+        <td class="montant ${Number(t.montant) >= 0 ? 'credit' : 'debit'}">${Number(t.montant) >= 0 ? '+' : ''}${poHTML(t.montant)}</td></tr>`).join('')
         || '<tr><td class="vide">Aucun mouvement.</td></tr>'}</table>
     </div>
   </div>`;
@@ -433,8 +584,25 @@ function brancher(page) {
       ${j.lien_discord ? `<p><a href="${esc(j.lien_discord)}" target="_blank" rel="noopener">Lire sur le Discord</a></p>` : ''}`);
   }));
   contenu.querySelectorAll('[data-filtre]').forEach(b => b.addEventListener('click', () => { filtreJournal = b.dataset.filtre; rendre(); }));
-  contenu.querySelectorAll('[data-pnj]').forEach(b => b.addEventListener('click', () => ouvrirFenetre(fichePersonne(E.pnj.find(p => p.id === b.dataset.pnj), 'pnj'))));
-  contenu.querySelectorAll('[data-colon]').forEach(b => b.addEventListener('click', () => ouvrirFenetre(fichePersonne(E.colons.find(p => p.id === b.dataset.colon), 'colon'))));
+  contenu.querySelectorAll('[data-sujet]').forEach(b => b.addEventListener('click', () => ouvrirFiche(b.dataset.sujet, b.dataset.id)));
+  contenu.querySelectorAll('[data-ajouter]').forEach(b => b.addEventListener('click', () => formulaireAjout(b.dataset.ajouter)));
+  const fcar = $('#form-carnet');
+  if (fcar) fcar.addEventListener('submit', ev => {
+    ev.preventDefault();
+    agir('portail_note_enregistrer', { p_id: null, p_cible_type: 'carnet', p_cible_id: null, p_texte: fcar.texte.value, p_prive: true, p_titre: fcar.titre.value }, fcar.querySelector('button'));
+  });
+  contenu.querySelectorAll('[data-editer-carnet]').forEach(b => b.addEventListener('click', () => {
+    const n = E.carnet.find(x => x.id === b.dataset.editerCarnet);
+    const art = b.closest('.page-carnet');
+    art.innerHTML = `<form><label class="champ"><span>Titre</span><input name="titre" maxlength="120" value="${esc(n.titre || '')}"></label>
+      <label class="champ"><span>Note</span><textarea name="texte" maxlength="4000" required style="min-height:10em">${esc(n.texte)}</textarea></label>
+      <div class="actions-note"><button class="bouton petit">Enregistrer</button><button type="button" class="lien-note" data-annuler>Annuler</button></div></form>`;
+    art.querySelector('[data-annuler]').onclick = () => rendre();
+    art.querySelector('form').onsubmit = ev => {
+      ev.preventDefault();
+      agir('portail_note_enregistrer', { p_id: n.id, p_cible_type: null, p_cible_id: null, p_texte: ev.target.texte.value, p_prive: null, p_titre: ev.target.titre.value }, ev.target.querySelector('button'));
+    };
+  }));
   const fc = $('#form-commande');
   if (fc) fc.addEventListener('submit', ev => { ev.preventDefault(); agir('portail_commander', { p_demande: fc.demande.value }, fc.querySelector('button')); });
   const ff = $('#form-fiche');

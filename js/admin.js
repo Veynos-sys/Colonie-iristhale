@@ -1,5 +1,5 @@
 import {
-  sb, esc, po, dateCourte, toast, msgErreur,
+  sb, esc, po, poHTML, champMonnaie, lireMonnaie, pieces, dateCourte, toast, msgErreur,
   ETATS_BESOIN, STATUTS_PROJET, STATUTS_MISSION, STATUTS_NAVIRE, STATUTS_COMMANDE, TYPES_JOURNAL, RAYONS,
 } from './commun.js';
 
@@ -85,9 +85,10 @@ const ENTITES = {
   pnj: {
     titre: 'PNJ', table: 'pnj', tri: ['ordre', true],
     aide: 'Ce que les colons savent d\'un PNJ se gère dans « Savoirs ».',
-    colonnes: ['portrait_url', 'nom', 'role', 'statut', 'visible'],
+    colonnes: ['portrait_url', 'nom', 'role', 'statut', 'cree_par', 'visible'],
     champs: [
       { n: 'nom', l: 'Nom', req: true }, { n: 'role', l: 'Rôle' }, { n: 'statut', l: 'Statut (vivant, disparu…)', d: 'vivant' },
+      { n: 'cree_par', l: 'Inscrit par (joueur)', t: 'lien', vers: 'colons', indice: 'Vide si c\'est vous qui l\'avez créé.' },
       { n: 'portrait_url', l: 'Portrait', t: 'image' },
       { n: 'description', l: 'Description visible de tous', t: 'long' },
       { n: 'ordre', l: 'Ordre', t: 'nombre', d: 0 }, { n: 'visible', l: 'Visible des joueurs', t: 'bool', d: true },
@@ -114,7 +115,7 @@ const ENTITES = {
     champs: [
       { n: 'nom', l: 'Nom', req: true }, { n: 'categorie', l: 'Catégorie' },
       { n: 'rayon', l: 'Rayon', t: 'choix', o: RAYONS, d: 'fonds' },
-      { n: 'prix', l: 'Prix en po (0.5 = 5 pa)', t: 'nombre', req: true, pas: 0.01 },
+      { n: 'prix', l: 'Prix', t: 'monnaie', req: true },
       { n: 'stock', l: 'Stock (vide = illimité)', t: 'nombre' },
       { n: 'cycle_id', l: 'Cycle d\'arrivage', t: 'lien', vers: 'cycles' },
       { n: 'description', l: 'Description', t: 'long' },
@@ -135,7 +136,7 @@ const ENTITES = {
       { n: 'colon_id', l: 'Colon', t: 'lien', vers: 'colons', req: true },
       { n: 'demande', l: 'Demande', t: 'long', req: true },
       { n: 'statut', l: 'Statut', t: 'choix', o: STATUTS_COMMANDE, d: 'demandee' },
-      { n: 'prix', l: 'Prix en po', t: 'nombre', pas: 0.01 },
+      { n: 'prix', l: 'Prix', t: 'monnaie' },
       { n: 'navire_id', l: 'Livrée par', t: 'lien', vers: 'navires' },
       { n: 'reponse', l: 'Réponse visible du colon', t: 'long' },
     ],
@@ -156,14 +157,27 @@ const ENTITES = {
   bestiaire: {
     titre: 'Bestiaire', table: 'bestiaire', tri: ['nom', true],
     aide: 'Une créature n\'apparaît aux joueurs qu\'une fois « Visible » cochée. Vous pouvez préparer des fiches à l\'avance.',
-    colonnes: ['image_url', 'nom', 'categorie', 'danger', 'decouvert_par', 'visible'],
+    colonnes: ['image_url', 'nom', 'categorie', 'danger', 'decouvert_par', 'cree_par', 'visible'],
     champs: [
       { n: 'nom', l: 'Nom', req: true }, { n: 'categorie', l: 'Catégorie' }, { n: 'danger', l: 'Danger (ex. Mortel)' },
       { n: 'habitat', l: 'Habitat' }, { n: 'image_url', l: 'Illustration', t: 'image' },
       { n: 'description', l: 'Description', t: 'long' },
       { n: 'decouvert_par', l: 'Documenté par', t: 'lien', vers: 'colons' }, { n: 'jour', l: 'Jour de la rencontre', t: 'nombre' },
+      { n: 'cree_par', l: 'Ajouté par (joueur)', t: 'lien', vers: 'colons' },
       { n: 'visible', l: 'Visible des joueurs', t: 'bool', d: false },
       { n: 'notes_mj', l: 'Notes MJ (statistiques, secrets)', t: 'long' },
+    ],
+  },
+  notes: {
+    titre: 'Notes des joueurs', table: 'notes', tri: ['modifie_le', false],
+    aide: 'Toutes les notes des joueurs : personnelles (que leur auteur est seul à voir sur le portail), partagées avec le village, et pages de carnet. Vous pouvez corriger ou supprimer.',
+    colonnes: ['modifie_le', 'auteur_id', 'cible_type', 'cible', 'prive', 'texte'],
+    champs: [
+      { n: 'auteur_id', l: 'Auteur', t: 'lien', vers: 'colons', req: true },
+      { n: 'cible_type', l: 'Sujet', t: 'choix', o: { pnj: 'PNJ', creature: 'Créature', colon: 'Colon', carnet: 'Carnet' } },
+      { n: 'titre', l: 'Titre (carnet)' },
+      { n: 'texte', l: 'Texte', t: 'long', req: true },
+      { n: 'prive', l: 'Personnelle (visible de l\'auteur seul)', t: 'bool', d: true },
     ],
   },
   journal: {
@@ -184,6 +198,7 @@ const LIBELLES = {
   emplacements: r => r.nom, colons: r => r.personnage, pnj: r => r.nom, navires: r => r.nom,
   projets: r => r.nom, scrutins: r => r.titre, cartes: r => r.nom, objets: r => r.nom,
   journal: r => `${r.jour ? `Jour ${r.jour} · ` : ''}${r.titre}`,
+  bestiaire: r => r.nom,
 };
 const cache = {};
 async function lookup(table, forcer = false) {
@@ -200,7 +215,7 @@ const libelle = (table, id) => id && cache[table]?.[id] ? LIBELLES[table](cache[
 const MENU = [
   ['Suivi', [['tableau', 'Tableau de bord', 'nouveautes'], ['or', 'Or des colons'], ['commandes', 'Commandes', 'commandes']]],
   ['Le village', [['village', 'Village & jour'], ['cycles', 'Cycles'], ['besoins', 'Besoins'], ['projets', 'Projets'], ['carte', 'Carte du village'], ['scrutins', 'Votes', 'scrutins'], ['navires', 'Navires']]],
-  ['Les gens', [['colons', 'Colons'], ['pnj', 'PNJ'], ['savoirs', 'Savoirs']]],
+  ['Les gens', [['colons', 'Colons'], ['pnj', 'PNJ'], ['savoirs', 'Savoirs'], ['notes', 'Notes des joueurs']]],
   ['Le monde', [['missions', 'Ordres de mission'], ['journal', 'Journal'], ['bestiaire', 'Bestiaire']]],
   ['Commerce', [['objets', 'Échoppe'], ['catalogue', 'Catalogue D&D 2024'], ['achats', 'Achats']]],
   ['Réglages', [['parametres', 'Paramètres']]],
@@ -243,6 +258,7 @@ async function chargerLiens(ent) {
   const tables = new Set(ent.champs.filter(c => c.t === 'lien').map(c => c.vers));
   ent.colonnes.forEach(c => { const ch = ent.champs.find(x => x.n === c); if (ch?.t === 'lien') tables.add(ch.vers); });
   if (ent.table === 'achats' || ent.table === 'missions') tables.add('colons');
+  if (ent.table === 'notes') ['pnj', 'bestiaire', 'colons'].forEach(t => tables.add(t));
   await Promise.all([...tables].map(t => lookup(t, true)));
 }
 
@@ -251,8 +267,9 @@ function cellule(ent, ligne, col) {
   const ch = ent.champs.find(c => c.n === col) || {};
   if (col === 'inscriptions') return v?.length ? v.map(i => esc(libelle('colons', i.colon_id))).join(', ') : '<span class="cache">aucun</span>';
   if (col === 'colon_id' && ent.table === 'achats') return esc(libelle('colons', v));
-  if (col === 'cree_le') return `<span style="white-space:nowrap">${dateCourte(v)}</span>`;
-  if (['prix', 'prix_total', 'montant'].includes(col)) return v === null ? '' : `<span class="num">${po(v)}</span>`;
+  if (col === 'cree_le' || col === 'modifie_le') return `<span style="white-space:nowrap">${dateCourte(v)}</span>`;
+  if (col === 'cible') return ligne.cible_type === 'carnet' ? esc(ligne.titre || 'Carnet') : esc(libelle({ pnj: 'pnj', creature: 'bestiaire', colon: 'colons' }[ligne.cible_type], ligne.cible_id));
+  if (['prix', 'prix_total', 'montant'].includes(col)) return v === null ? '' : `<span class="num">${poHTML(v)}</span>`;
   if (v === null || v === undefined || v === '') return '';
   if (ch.t === 'bool' || typeof v === 'boolean') return v ? '✓' : '<span class="cache">non</span>';
   if (ch.t === 'choix') return esc(ch.o[v] || v);
@@ -269,7 +286,7 @@ async function vueListe(cle) {
   const { data, error } = await q;
   if (error) throw error;
 
-  const enTete = c => (ent.champs.find(x => x.n === c)?.l) || { cree_le: 'Date', inscriptions: 'Volontaires', colon_id: 'Colon', nom_objet: 'Objet', quantite: 'Qté', prix_total: 'Total' }[c] || c;
+  const enTete = c => (ent.champs.find(x => x.n === c)?.l) || { cree_le: 'Date', modifie_le: 'Date', cible: 'Sur', inscriptions: 'Volontaires', colon_id: 'Colon', nom_objet: 'Objet', quantite: 'Qté', prix_total: 'Total' }[c] || c;
   const dessiner = filtre => {
     const lignes = data.filter(r => !filtre || JSON.stringify(r).toLowerCase().includes(filtre) ||
       ent.colonnes.some(c => cellule(ent, r, c).toLowerCase().includes(filtre)));
@@ -312,6 +329,8 @@ function champHTML(c, val) {
       return `<div class="champ"><span>${esc(c.l)}</span>${v ? `<img class="apercu-image" src="${esc(v)}" alt="">` : ''}
         <input name="${c.n}" type="url" value="${esc(v)}" placeholder="Lien https://… ou fichier ci-dessous">
         <input name="${c.n}__fichier" type="file" accept="image/*" style="margin-top:6px"></div>`;
+    case 'monnaie':
+      return champMonnaie(c.n, val ?? c.d, { label: c.l });
     case 'url':
       return `<label class="champ"><span>${esc(c.l)}</span><input id="${id}" name="${c.n}" type="url" value="${esc(v)}">${indice}</label>`;
     case 'connaisseurs': {
@@ -338,6 +357,7 @@ async function lireFormulaire(form, champs, dossier) {
   for (const c of champs) {
     if (c.t === 'connaisseurs') continue;
     if (c.t === 'bool') { ligne[c.n] = form.elements[c.n].checked; continue; }
+    if (c.t === 'monnaie') { ligne[c.n] = lireMonnaie(form, c.n); continue; }
     let v = fd.get(c.n);
     if (c.t === 'image') {
       const f = fd.get(c.n + '__fichier');
@@ -384,7 +404,7 @@ async function editer(cle, ligne, apres) {
   });
   form.addEventListener('submit', async ev => {
     ev.preventDefault();
-    const manque = ent.champs.filter(c => c.req && !String(form.elements[c.n]?.value ?? '').trim());
+    const manque = ent.champs.filter(c => c.req && (c.t === 'monnaie' ? lireMonnaie(form, c.n) === null : !String(form.elements[c.n]?.value ?? '').trim()));
     if (manque.length) return toast(`À remplir : ${manque.map(c => c.l).join(', ')}`, 'erreur');
     const btn = form.querySelector('button[type=submit]'); btn.disabled = true;
     try {
@@ -432,7 +452,7 @@ async function vueTableau() {
       <a class="tuile" href="#colons"><strong>${Object.values(cache.colons).filter(c => c.actif).length}</strong><span>colons actifs</span></a>
       <a class="tuile" href="#scrutins"><strong>${nbVotes || 0}</strong><span>vote(s) ouvert(s)</span></a>
       <a class="tuile" href="#commandes"><strong>${nbCmd || 0}</strong><span>commande(s) en attente</span></a>
-      <a class="tuile" href="#or"><strong>${po((soldes || []).reduce((s, r) => s + Number(r.solde), 0))}</strong><span>d'or dans les bourses</span></a>
+      <a class="tuile" href="#or"><strong style="font-size:1.3rem">${poHTML((soldes || []).reduce((s, r) => s + Number(r.solde), 0))}</strong><span>d'or dans les bourses</span></a>
     </div>
     <h2>Nouveautés à annoncer sur Discord</h2>
     <p class="aide">Ce qui a changé depuis la dernière annonce : projets, missions, votes, objets de l'échoppe. Rien ne part tant que vous ne cliquez pas sur « Publier ».</p>
@@ -534,20 +554,18 @@ async function vueOr() {
       <form class="bloc" id="form-or"><h2 style="margin-top:0">Verser ou retirer</h2>
         <div class="champ"><span>Colons concernés</span>
           <div class="cases"><label><input type="checkbox" id="tous"> <em>Tous les actifs</em></label>${(soldes || []).filter(s => cache.colons[s.colon_id]?.actif).map(s => `<label><input type="checkbox" name="c" value="${s.colon_id}"> ${esc(s.personnage)}</label>`).join('')}</div></div>
-        <div class="deux">
-          <label class="champ"><span>Montant en po par colon (négatif pour retirer)</span><input name="montant" type="number" step="0.01" required></label>
-          <label class="champ"><span>Motif</span><input name="motif" required placeholder="Ex. : Mission du bûcher"></label>
-        </div>
+        ${champMonnaie('montant', null, { label: 'Montant par colon', signe: true })}
+        <label class="champ"><span>Motif</span><input name="motif" required placeholder="Ex. : Mission du bûcher"></label>
         <button class="bouton" type="submit">Enregistrer</button>
       </form>
       <div class="bloc"><h2 style="margin-top:0">Soldes</h2>
-        <table class="donnees">${(soldes || []).map(s => `<tr class="${cache.colons[s.colon_id]?.actif ? '' : 'cache'}"><td>${esc(s.personnage)}<br><span class="cache">${esc(s.joueur)}</span></td><td class="num">${po(s.solde)}</td></tr>`).join('')}</table>
+        <table class="donnees">${(soldes || []).map(s => `<tr class="${cache.colons[s.colon_id]?.actif ? '' : 'cache'}"><td>${esc(s.personnage)}<br><span class="cache">${esc(s.joueur)}</span></td><td class="num">${poHTML(s.solde)}</td></tr>`).join('')}</table>
       </div>
     </div>
     <h2>Derniers mouvements</h2>
     <div class="table-cadre"><table class="donnees"><thead><tr><th>Date</th><th>Colon</th><th>Motif</th><th>Origine</th><th>Montant</th><th></th></tr></thead><tbody>
     ${(tx || []).map(t => `<tr><td>${dateCourte(t.cree_le)}</td><td>${esc(libelle('colons', t.colon_id))}</td><td>${esc(t.motif)}</td><td>${esc(t.origine)}</td>
-      <td class="num" style="color:${Number(t.montant) < 0 ? '#E08A90' : '#9FC48B'}">${po(t.montant)}</td>
+      <td class="num" style="color:${Number(t.montant) < 0 ? '#E08A90' : '#9FC48B'}">${poHTML(t.montant)}</td>
       <td><button class="bouton danger petit" data-suppr="${t.id}">×</button></td></tr>`).join('')}
     </tbody></table></div>`;
   $('#tous').onchange = e => vue.querySelectorAll('input[name=c]').forEach(i => i.checked = e.target.checked);
@@ -556,7 +574,9 @@ async function vueOr() {
     const f = ev.target;
     const ids = [...f.querySelectorAll('input[name=c]:checked')].map(i => i.value);
     if (!ids.length) return toast('Cochez au moins un colon.', 'erreur');
-    const { error } = await sb.from('transactions').insert(ids.map(colon_id => ({ colon_id, montant: Number(f.montant.value), motif: f.motif.value.trim(), origine: 'mj' })));
+    const montant = lireMonnaie(f, 'montant');
+    if (!montant) return toast('Indiquez un montant.', 'erreur');
+    const { error } = await sb.from('transactions').insert(ids.map(colon_id => ({ colon_id, montant, motif: f.motif.value.trim(), origine: 'mj' })));
     if (error) return toast(msgErreur(error), 'erreur');
     toast(`${ids.length} mouvement(s) enregistré(s).`); router();
   };
@@ -822,7 +842,7 @@ async function vueCatalogue() {
       <td><input type="checkbox" data-c="${c.id}" ${choisis.has(c.id) ? 'checked' : ''}></td>
       <td><strong>${esc(c.nom)}</strong>${c.rarete ? `<br><span class="cache">${esc(c.rarete)}</span>` : ''}</td>
       <td>${esc(c.categorie)}${c.sous_categorie ? `<br><span class="cache">${esc(c.sous_categorie)}</span>` : ''}</td>
-      <td class="num">${c.prix === null ? '<span class="cache">variable</span>' : po(c.prix)}</td>
+      <td class="num">${c.prix === null ? '<span class="cache">variable</span>' : poHTML(c.prix)}</td>
       <td style="white-space:nowrap">${esc(c.poids || '')}</td>
       <td><span class="court">${esc(c.details || '')}</span></td></tr>`).join('');
     $('#tbody').querySelectorAll('[data-c]').forEach(i => i.onchange = () => { i.checked ? choisis.add(i.dataset.c) : choisis.delete(i.dataset.c); majBouton(); });
@@ -843,22 +863,26 @@ function mettreEnVente(liste) {
       <label class="champ"><span>Cycle d'arrivage</span><select name="cycle"><option value="">(aucun)</option>${Object.values(cache.cycles || {}).sort((a, b) => b.numero - a.numero).map(c => `<option value="${c.id}" ${cycleEnCours?.id === c.id ? 'selected' : ''}>${esc(LIBELLES.cycles(c))}</option>`).join('')}</select></label>
     </div>
     <div class="table-cadre"><table class="donnees"><thead><tr><th>Objet</th><th>Catégorie à l'échoppe</th><th>Prix de vente (po)</th></tr></thead><tbody>
-    ${liste.map((c, i) => `<tr><td>${esc(c.nom)}<br><span class="cache">manuel : ${c.prix === null ? 'variable' : po(c.prix)}</span></td>
+    ${liste.map((c, i) => `<tr><td>${esc(c.nom)}<br><span class="cache">manuel : ${c.prix === null ? 'variable' : poHTML(c.prix)}</span></td>
       <td><input class="saisie" name="cat-${i}" value="${esc(c.categorie === 'Objets magiques' ? 'Objets magiques' : (c.sous_categorie && c.categorie === 'Outils' ? c.sous_categorie : c.categorie))}" style="background:var(--mer);color:var(--clair)"></td>
-      <td><input class="saisie" name="prix-${i}" type="number" step="0.01" min="0" required value="${prixDe(c, majo)}" data-base="${c.prix ?? ''}" style="background:var(--mer);color:var(--clair);width:8em"></td></tr>`).join('')}
+      <td data-base="${c.prix ?? ''}" data-i="${i}">${champMonnaie(`prix-${i}`, c.prix === null ? null : prixDe(c, majo))}</td></tr>`).join('')}
     </tbody></table></div>
     <div class="pied"><span class="aide" style="margin:0">Chaque nouvel objet apparaîtra dans les nouveautés à annoncer.</span><div class="droite"><button type="button" class="bouton discret" onclick="this.closest('dialog').close()">Annuler</button><button class="bouton">Ajouter à l'échoppe</button></div></div></form>`;
   modale.showModal();
   const f = $('#f-vente');
-  f.majo.oninput = () => f.querySelectorAll('[data-base]').forEach(i => { if (i.dataset.base !== '') i.value = Math.round(Number(i.dataset.base) * Number(f.majo.value || 1) * 100) / 100; });
+  f.majo.oninput = () => f.querySelectorAll('td[data-base]').forEach(td => {
+    if (td.dataset.base === '') return;
+    const p = pieces(Math.round(Number(td.dataset.base) * Number(f.majo.value || 1) * 100) / 100);
+    ['po', 'pa', 'pc'].forEach(k => { f.elements[`prix-${td.dataset.i}__${k}`].value = p[k]; });
+  });
   f.onsubmit = async ev => {
     ev.preventDefault();
     const lignes = liste.map((c, i) => ({
       nom: c.nom, categorie: f[`cat-${i}`].value.trim() || c.categorie, rayon: f.rayon.value,
-      prix: Number(f[`prix-${i}`].value), stock: f.stock.value === '' ? null : Number(f.stock.value),
+      prix: lireMonnaie(f, `prix-${i}`), stock: f.stock.value === '' ? null : Number(f.stock.value),
       cycle_id: f.cycle.value || null, description: c.details || null, visible: true,
     }));
-    if (liste.some((c, i) => f[`prix-${i}`].value === '')) return toast('Indiquez un prix pour chaque objet.', 'erreur');
+    if (lignes.some(l => l.prix === null || l.prix < 0)) return toast('Indiquez un prix pour chaque objet.', 'erreur');
     const { error } = await sb.from('objets').insert(lignes);
     if (error) return toast(msgErreur(error), 'erreur');
     toast(`${lignes.length} objet(s) ajouté(s) à l'échoppe.`); modale.close(); dessinerMenu();
