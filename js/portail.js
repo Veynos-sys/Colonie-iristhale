@@ -198,7 +198,10 @@ function projet(p) {
 function echoppe() {
   const peutPayer = prix => Number(E.moi.solde) >= Number(prix);
   const ligne = o => `<tr>
-    <td>${esc(o.nom)}${o.description ? `<span class="desc">${esc(o.description)}</span>` : ''}</td>
+    <td><span class="nom-objet">${esc(o.nom)}</span>${o.rarete ? ` <span class="badge or">${esc(o.rarete)}</span>` : ''}
+      ${o.description ? `<span class="desc">${esc(o.description)}</span>` : ''}
+      ${o.details || o.poids ? `<span class="stats">${[o.details, o.poids ? `poids ${o.poids}` : null].filter(Boolean).map(esc).join(' · ')}</span>` : ''}
+      ${o.texte ? texteObjet(o.texte) : ''}</td>
     <td class="prix">${poHTML(o.prix)}</td>
     <td class="stock">${o.stock === null ? '' : o.stock > 0 ? `Reste ${o.stock}` : '<span class="badge rouge">Épuisé</span>'}</td>
     <td class="col-achat"><div class="achat">
@@ -235,6 +238,8 @@ function echoppe() {
   <h2 class="titre-section">Fonds de l'échoppe <small>toujours disponible</small></h2>
   <div class="parchemin carte-p">${fonds.length ? table(fonds) : '<p class="vide">Les étagères sont vides.</p>'}</div>
 
+  <p class="meta" style="font-size:.8rem;margin:.6em 0 0">Descriptions et prix de référence issus du Document de Référence du Système 5.2.1 (Wizards of the Coast LLC), licence CC-BY-4.0.</p>
+
   <h2 class="titre-section">Commande pour Estoria <small>livrée par un prochain navire, si la Compagnie accepte</small></h2>
   <div class="deux-colonnes">
     <form id="form-commande" class="parchemin carte-p">
@@ -248,6 +253,13 @@ function echoppe() {
         ${esc(k.demande)}${k.prix ? ` · <strong>${poHTML(k.prix)}</strong>` : ''}${k.reponse ? `<br><span class="meta">${esc(k.reponse)}</span>` : ''}</p>`).join('') : '<p class="vide">Aucune commande.</p>'}
     </div>
   </div>`;
+}
+
+// Description officielle : première phrase visible, la suite dépliable
+function texteObjet(t) {
+  const m = t.match(/^(.{20,230}?[.!?])\s+(.*)$/s);
+  if (!m) return `<span class="texte-objet">${esc(t)}</span>`;
+  return `<span class="texte-objet">${esc(m[1])}</span><details class="suite-objet"><summary>Lire la suite</summary><span class="texte-objet">${esc(m[2])}</span></details>`;
 }
 
 function missions() {

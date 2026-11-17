@@ -110,15 +110,16 @@ const ENTITES = {
   },
   objets: {
     titre: 'Échoppe', table: 'objets', tri: ['rayon', true],
-    aide: 'Stock vide = illimité. Rayon « Arrivage » : quantités limitées, à renouveler à chaque cycle. Décochez « Visible » pour retirer un objet sans le supprimer.',
-    colonnes: ['nom', 'categorie', 'rayon', 'prix', 'stock', 'cycle_id', 'visible'],
+    aide: 'Liez chaque objet au catalogue D&D pour afficher sa description officielle. Stock vide = illimité. Rayon « Arrivage » : quantités limitées, à renouveler à chaque cycle. Décochez « Visible » pour retirer un objet sans le supprimer.',
+    colonnes: ['nom', 'categorie', 'rayon', 'prix', 'stock', 'cycle_id', 'catalogue_id', 'visible'],
     champs: [
       { n: 'nom', l: 'Nom', req: true }, { n: 'categorie', l: 'Catégorie' },
       { n: 'rayon', l: 'Rayon', t: 'choix', o: RAYONS, d: 'fonds' },
       { n: 'prix', l: 'Prix', t: 'monnaie', req: true },
       { n: 'stock', l: 'Stock (vide = illimité)', t: 'nombre' },
       { n: 'cycle_id', l: 'Cycle d\'arrivage', t: 'lien', vers: 'cycles' },
-      { n: 'description', l: 'Description', t: 'long' },
+      { n: 'catalogue_id', l: 'Objet du catalogue D&D', t: 'lien', vers: 'catalogue', indice: 'Affiche sous l\'objet la description et les caractéristiques officielles.' },
+      { n: 'description', l: 'Petit mot de l\'échoppe (facultatif, en italique)', t: 'long' },
       { n: 'ordre', l: 'Ordre', t: 'nombre', d: 0 }, { n: 'visible', l: 'En vente', t: 'bool', d: true },
     ],
   },
@@ -199,6 +200,7 @@ const LIBELLES = {
   projets: r => r.nom, scrutins: r => r.titre, cartes: r => r.nom, objets: r => r.nom,
   journal: r => `${r.jour ? `Jour ${r.jour} · ` : ''}${r.titre}`,
   bestiaire: r => r.nom,
+  catalogue: r => `${r.nom} · ${r.categorie}`,
 };
 const cache = {};
 async function lookup(table, forcer = false) {
@@ -880,7 +882,7 @@ function mettreEnVente(liste) {
     const lignes = liste.map((c, i) => ({
       nom: c.nom, categorie: f[`cat-${i}`].value.trim() || c.categorie, rayon: f.rayon.value,
       prix: lireMonnaie(f, `prix-${i}`), stock: f.stock.value === '' ? null : Number(f.stock.value),
-      cycle_id: f.cycle.value || null, description: c.details || null, visible: true,
+      cycle_id: f.cycle.value || null, catalogue_id: c.id, description: null, visible: true,
     }));
     if (lignes.some(l => l.prix === null || l.prix < 0)) return toast('Indiquez un prix pour chaque objet.', 'erreur');
     const { error } = await sb.from('objets').insert(lignes);

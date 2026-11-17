@@ -112,7 +112,16 @@
 .etal td{padding:.55em .5em;border-bottom:1px solid rgba(43,33,27,.12);vertical-align:middle}
 .etal tr:last-child td{border-bottom:0}
 .etal .prix{white-space:nowrap;font-weight:600}
+.etal .nom-objet{font-weight:600}
 .etal .desc{display:block;font-size:.85rem;color:var(--encre-douce);font-style:italic}
+.etal .stats{display:block;font-size:.8rem;color:var(--cire);margin-top:.15em}
+.etal .texte-objet{font-size:.86rem;color:var(--encre);line-height:1.5}
+.etal td:first-child>.texte-objet{display:block;margin-top:.25em}
+.suite-objet summary{font-size:.8rem;color:var(--cire);cursor:pointer;text-decoration:underline;list-style:none;margin-top:.15em}
+.suite-objet summary::-webkit-details-marker{display:none}
+.suite-objet[open] summary{display:none}
+.suite-objet .texte-objet{display:block;margin-top:.2em}
+.etal td:first-child{max-width:520px}
 .etal .achat{display:flex;gap:6px;justify-content:flex-end;align-items:center}
 .etal .achat input{width:4em;padding:.3em .4em;border:1px solid rgba(43,33,27,.35);border-radius:3px;background:rgba(255,255,255,.55)}
 .etal .stock{font-size:.85rem;white-space:nowrap}
