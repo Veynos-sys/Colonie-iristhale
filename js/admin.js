@@ -765,6 +765,7 @@ async function vueCarte() {
 }
 
 // =============================================================== Carte de la région
+const zr = { z: 1, x: 0, y: 0 }; // zoom de la carte de la région, conservé entre deux affichages
 const TYPES_REPERE = { lieu: '📍 Lieu', ressource: '🌿 Ressource', danger: '⚠️ Danger', rumeur: '❓ Rumeur', autre: '✦ Autre' };
 async function vueRegion() {
   const [{ data: v }, { data: reperes }] = await Promise.all([
@@ -774,15 +775,18 @@ async function vueRegion() {
   await lookup('colons', true);
   const url = v?.carte_region_url;
   vue.innerHTML = `<h1>Carte de la région</h1>
-    <p class="aide">Téléversez votre carte Inkarnate : elle remplace la précédente. Les repères sont placés en pourcentage de l'image, ils restent en place si vous gardez le même cadrage. Cliquez sur la carte pour poser un repère officiel, cliquez sur un repère pour le modifier, faites-le glisser pour le déplacer. Vous voyez aussi les repères personnels des joueurs (en pointillés).</p>
+    <p class="aide">Téléversez votre carte Inkarnate : elle remplace la précédente. Les repères sont placés en pourcentage de l'image, ils restent en place si vous gardez le même cadrage. Molette ou boutons + et − pour zoomer, glisser sur la carte pour vous déplacer. Cliquez sur la carte pour poser un repère officiel, cliquez sur un repère pour le modifier, faites-le glisser pour le déplacer. Vous voyez aussi les repères personnels des joueurs (en pointillés).</p>
     <div class="barre-outils">
       <label class="bouton" style="cursor:pointer">${url ? 'Remplacer la carte' : 'Téléverser la carte'}<input type="file" id="fichier-region" accept="image/*" hidden></label>
       ${url ? '<button class="bouton danger petit" id="retirer-region">Retirer la carte</button>' : ''}
       <span class="cache">${reperes.length} repère(s)</span>
     </div>
     ${url ? `<div class="editeur">
-      <div class="plan" id="plan-region"><img src="${esc(url)}" alt="">
-        ${reperes.map(r => `<div class="pt ${r.prive ? 'libre' : ''} ${r.auteur_id ? '' : 'officiel'}" data-id="${r.id}" style="left:${r.x}%;top:${r.y}%" title="${esc(r.titre)}">${esc((TYPES_REPERE[r.type] || '✦').split(' ')[0])}<span>${esc(r.titre)}</span></div>`).join('')}
+      <div class="plan visionneuse-admin" id="vis-region">
+        <div class="toile" id="plan-region"><img src="${esc(url)}" alt="" id="img-region-admin" draggable="false">
+          ${reperes.map(r => `<div class="pt ${r.prive ? 'libre' : ''} ${r.auteur_id ? '' : 'officiel'}" data-id="${r.id}" style="left:${r.x}%;top:${r.y}%" title="${esc(r.titre)}">${esc((TYPES_REPERE[r.type] || '✦').split(' ')[0])}<span>${esc(r.titre)}</span></div>`).join('')}
+        </div>
+        <div class="zoom-btns"><button type="button" data-zoom="1.5" aria-label="Zoomer">+</button><button type="button" data-zoom="0.66" aria-label="Dézoomer">−</button><button type="button" data-zoom="0" aria-label="Recentrer">⟲</button></div>
       </div>
       <div class="bloc" id="panneau-repere"><p class="aide" style="margin:0">Cliquez sur la carte ou sur un repère.</p></div>
     </div>` : '<div class="bloc">Pas encore de carte.</div>'}`;
@@ -804,7 +808,46 @@ async function vueRegion() {
   if (!url) return;
 
   const plan = $('#plan-region');
-  const pos = ev => { const r = plan.getBoundingClientRect(); return { x: Math.min(100, Math.max(0, (ev.clientX - r.left) / r.width * 100)), y: Math.min(100, Math.max(0, (ev.clientY - r.top) / r.height * 100)) }; };
+  const vis = $('#vis-region');
+  const img = $('#img-region-admin');
+  // Zoom et déplacement (mêmes gestes que côté joueurs)
+  const appliquer = () => { plan.style.transform = `translate(${zr.x}px, ${zr.y}px) scale(${zr.z})`; plan.style.setProperty('--z', zr.z); };
+  const borner = () => {
+    const W = vis.clientWidth, H = vis.clientHeight, w = plan.offsetWidth * zr.z, h = plan.offsetHeight * zr.z;
+    zr.x = w <= W ? (W - w) / 2 : Math.min(0, Math.max(W - w, zr.x));
+    zr.y = h <= H ? (H - h) / 2 : Math.min(0, Math.max(H - h, zr.y));
+  };
+  const zoomer = (f, cx, cy) => {
+    const z2 = Math.min(10, Math.max(1, zr.z * f));
+    zr.x = cx - (cx - zr.x) * (z2 / zr.z); zr.y = cy - (cy - zr.y) * (z2 / zr.z); zr.z = z2; borner(); appliquer();
+  };
+  const ajuster = () => { vis.style.height = Math.min(window.innerHeight * 0.75, plan.offsetHeight || 400) + 'px'; borner(); appliquer(); };
+  img.complete ? ajuster() : img.addEventListener('load', ajuster);
+  window.onresize = ajuster;
+  vis.addEventListener('wheel', ev => { ev.preventDefault(); const r = vis.getBoundingClientRect(); zoomer(ev.deltaY < 0 ? 1.2 : 1 / 1.2, ev.clientX - r.left, ev.clientY - r.top); }, { passive: false });
+  vis.querySelectorAll('[data-zoom]').forEach(b => b.addEventListener('click', ev => {
+    ev.stopPropagation();
+    const f = Number(b.dataset.zoom);
+    if (!f) { zr.z = 1; zr.x = 0; zr.y = 0; borner(); appliquer(); return; }
+    zoomer(f, vis.clientWidth / 2, vis.clientHeight / 2);
+  }));
+  let glisse = null;
+  vis.addEventListener('pointerdown', ev => {
+    if (ev.target.closest('.pt, .zoom-btns')) return;
+    glisse = { x: ev.clientX, y: ev.clientY, zx: zr.x, zy: zr.y, bouge: false }; vis.setPointerCapture(ev.pointerId);
+  });
+  vis.addEventListener('pointermove', ev => {
+    if (!glisse) return;
+    const dx = ev.clientX - glisse.x, dy = ev.clientY - glisse.y;
+    if (Math.hypot(dx, dy) > 5) glisse.bouge = true;
+    if (glisse.bouge) { zr.x = glisse.zx + dx; zr.y = glisse.zy + dy; borner(); appliquer(); }
+  });
+  vis.addEventListener('pointerup', ev => {
+    if (!glisse) return;
+    const clic = !glisse.bouge; glisse = null;
+    if (clic) nouveauRepere(ev);
+  });
+  const pos = ev => { const r = img.getBoundingClientRect(); return { x: Math.min(100, Math.max(0, (ev.clientX - r.left) / r.width * 100)), y: Math.min(100, Math.max(0, (ev.clientY - r.top) / r.height * 100)) }; };
   const panneau = (r, nx, ny) => {
     plan.querySelectorAll('.pt').forEach(p => p.classList.toggle('choisi', p.dataset.id === r?.id));
     $('#panneau-repere').innerHTML = `<form id="f-repere"><h2 style="margin-top:0">${r ? 'Repère' : 'Nouveau repère officiel'}</h2>
@@ -826,14 +869,13 @@ async function vueRegion() {
       await sb.from('reperes').delete().eq('id', r.id); router();
     });
   };
-  plan.addEventListener('click', ev => {
-    if (ev.target.closest('.pt')) return;
+  const nouveauRepere = ev => {
     const { x, y } = pos(ev);
     plan.querySelector('.pt.nouveau')?.remove();
     const pt = document.createElement('div'); pt.className = 'pt officiel nouveau choisi'; pt.style.left = x + '%'; pt.style.top = y + '%';
     plan.append(pt);
     panneau(null, Math.round(x * 100) / 100, Math.round(y * 100) / 100);
-  });
+  };
   plan.querySelectorAll('.pt[data-id]').forEach(pt => {
     let depart = null, bouge = false;
     pt.addEventListener('pointerdown', ev => { ev.stopPropagation(); depart = { x: ev.clientX, y: ev.clientY }; bouge = false; pt.setPointerCapture(ev.pointerId); });

@@ -283,7 +283,7 @@ function corpsJournal(t) {
     paras = reste ? [debut.trim(), reste] : [paras[0]];
   }
   if (paras.length === 1) return para(paras[0]);
-  return `${para(paras[0])}<details class="suite-journal"><summary><span class="bouton-suite">Afficher la suite</span></summary>${para(paras.slice(1).join('\n\n'))}</details>`;
+  return `${para(paras[0])}<details class="suite-journal"><summary><span class="bouton-suite">Afficher la suite</span></summary>${para(paras.slice(1).join('\n\n'))}<button type="button" class="bouton-suite replier" data-replier>Afficher moins</button></details>`;
 }
 
 function missions() {
@@ -775,6 +775,11 @@ function brancher(page) {
     ouvrirFenetre(`<p class="meta" style="margin:0">${j.jour ? `Jour ${esc(j.jour)} · ` : ''}${TYPES_JOURNAL[j.type]}${j.auteur ? ` · ${esc(j.auteur)}` : ''}</p>
       <h2>${esc(j.titre)}</h2>${para(j.contenu)}
       ${j.lien_discord ? `<p><a href="${esc(j.lien_discord)}" target="_blank" rel="noopener">Lire sur le Discord</a></p>` : ''}`);
+  }));
+  contenu.querySelectorAll('[data-replier]').forEach(b => b.addEventListener('click', () => {
+    const d = b.closest('details'); d.open = false;
+    const art = d.closest('.entree-journal');
+    if (art && art.getBoundingClientRect().top < 120) art.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }));
   contenu.querySelectorAll('[data-filtre]').forEach(b => b.addEventListener('click', () => { filtreJournal = b.dataset.filtre; rendre(); }));
   contenu.querySelectorAll('[data-sujet]').forEach(b => b.addEventListener('click', () => ouvrirFiche(b.dataset.sujet, b.dataset.id)));

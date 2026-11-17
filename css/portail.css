@@ -318,3 +318,5 @@ button.creature:hover,button.personne:hover{transform:translateY(-1px)}
 .choix-visibilite{border:1px solid rgba(43,33,27,.25);border-radius:4px;padding:.5em .8em;margin:0 0 1em}
 .choix-visibilite legend{font-size:.85rem;padding:0 .3em}
 .choix-visibilite label{display:block;margin:.2em 0}
+.bouton-suite.replier{background:none;cursor:pointer;margin:.2em 0 .4em}
+.entree-journal{scroll-margin-top:130px}

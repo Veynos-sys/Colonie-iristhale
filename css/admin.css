@@ -106,3 +106,12 @@ table.donnees{width:100%;border-collapse:collapse;font-size:.92rem}
 
 .case-fil input{width:auto;margin:3px 0 0}
 .plan .pt.officiel{background:var(--cire-vive);border-color:var(--or);color:#fff}
+
+/* Carte de la région : zoom et déplacement */
+.visionneuse-admin{position:relative;overflow:hidden;cursor:grab;touch-action:none;background:#0B0D1C}
+.visionneuse-admin:active{cursor:grabbing}
+.visionneuse-admin .toile{position:absolute;left:0;top:0;width:100%;transform-origin:0 0;--z:1}
+.visionneuse-admin .toile img{display:block;width:100%;height:auto;pointer-events:none}
+.visionneuse-admin .pt{transform:translate(-50%,-50%) scale(calc(1 / var(--z)))}
+.zoom-btns{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:6px;z-index:2}
+.zoom-btns button{width:34px;height:34px;border-radius:4px;border:1px solid var(--or);background:rgba(28,33,64,.9);color:var(--or-pale);font-size:1.15rem;cursor:pointer}
