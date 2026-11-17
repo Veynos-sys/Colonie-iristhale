@@ -194,3 +194,5 @@
 .fenetre h2{font-size:1.8rem;color:var(--encre)}
 .fenetre .fermer{display:block;margin:16px 0 0 auto}
 .fenetre-tete{display:flex;gap:16px;align-items:center;margin-bottom:12px}
+
+.liens-mission{display:flex;gap:12px;align-items:center;flex-wrap:wrap}

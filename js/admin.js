@@ -148,7 +148,8 @@ const ENTITES = {
       { n: 'titre', l: 'Titre', req: true }, { n: 'donneur', l: 'Donné par', d: 'Halvar Ordan' },
       { n: 'statut', l: 'Statut', t: 'choix', o: STATUTS_MISSION, d: 'ouverte' },
       { n: 'resume', l: 'Résumé (une phrase)', t: 'long' }, { n: 'description', l: 'Description complète', t: 'long' },
-      { n: 'recompense', l: 'Récompense', t: 'long' }, { n: 'lien_discord', l: 'Lien vers le Discord', t: 'url' },
+      { n: 'recompense', l: 'Récompense', t: 'long' }, { n: 'lien_discord', l: 'Discussion sur le Discord (lien)', t: 'url' },
+      { n: 'rapport_id', l: 'Rapport au journal', t: 'lien', vers: 'journal', indice: 'Créez d\'abord l\'entrée dans « Journal », puis reliez-la ici.' },
       { n: 'ordre', l: 'Ordre', t: 'nombre', d: 0 }, { n: 'visible', l: 'Visible des joueurs', t: 'bool', d: true },
     ],
   },
@@ -182,6 +183,7 @@ const LIBELLES = {
   besoins: r => `${r.icone || ''} ${r.nom}`, cycles: r => `Cycle ${r.numero}${r.titre ? ' · ' + r.titre : ''}`,
   emplacements: r => r.nom, colons: r => r.personnage, pnj: r => r.nom, navires: r => r.nom,
   projets: r => r.nom, scrutins: r => r.titre, cartes: r => r.nom, objets: r => r.nom,
+  journal: r => `${r.jour ? `Jour ${r.jour} · ` : ''}${r.titre}`,
 };
 const cache = {};
 async function lookup(table, forcer = false) {
@@ -196,21 +198,22 @@ const libelle = (table, id) => id && cache[table]?.[id] ? LIBELLES[table](cache[
 
 // =============================================================== Navigation
 const MENU = [
-  ['Suivi', [['tableau', 'Tableau de bord'], ['or', 'Or des colons'], ['commandes', 'Commandes', 'commandes']]],
+  ['Suivi', [['tableau', 'Tableau de bord', 'nouveautes'], ['or', 'Or des colons'], ['commandes', 'Commandes', 'commandes']]],
   ['Le village', [['village', 'Village & jour'], ['cycles', 'Cycles'], ['besoins', 'Besoins'], ['projets', 'Projets'], ['carte', 'Carte du village'], ['scrutins', 'Votes', 'scrutins'], ['navires', 'Navires']]],
   ['Les gens', [['colons', 'Colons'], ['pnj', 'PNJ'], ['savoirs', 'Savoirs']]],
   ['Le monde', [['missions', 'Ordres de mission'], ['journal', 'Journal'], ['bestiaire', 'Bestiaire']]],
-  ['Commerce', [['objets', 'Échoppe'], ['achats', 'Achats']]],
+  ['Commerce', [['objets', 'Échoppe'], ['catalogue', 'Catalogue D&D 2024'], ['achats', 'Achats']]],
   ['Réglages', [['parametres', 'Paramètres']]],
 ];
-const VUES_SPECIALES = { tableau: vueTableau, or: vueOr, village: vueVillage, carte: vueCarte, scrutins: vueScrutins, parametres: vueParametres };
+const VUES_SPECIALES = { catalogue: vueCatalogue, tableau: vueTableau, or: vueOr, village: vueVillage, carte: vueCarte, scrutins: vueScrutins, parametres: vueParametres };
 
 async function compteurs() {
-  const [k, s] = await Promise.all([
+  const [k, s, n] = await Promise.all([
     sb.from('commandes').select('id', { count: 'exact', head: true }).eq('statut', 'demandee'),
     sb.from('scrutins').select('id', { count: 'exact', head: true }).eq('statut', 'ouvert'),
+    sb.from('nouveautes').select('id', { count: 'exact', head: true }),
   ]);
-  return { commandes: k.count || 0, scrutins: s.count || 0 };
+  return { commandes: k.count || 0, scrutins: s.count || 0, nouveautes: n.count || 0 };
 }
 
 async function dessinerMenu() {
@@ -431,6 +434,9 @@ async function vueTableau() {
       <a class="tuile" href="#commandes"><strong>${nbCmd || 0}</strong><span>commande(s) en attente</span></a>
       <a class="tuile" href="#or"><strong>${po((soldes || []).reduce((s, r) => s + Number(r.solde), 0))}</strong><span>d'or dans les bourses</span></a>
     </div>
+    <h2>Nouveautés à annoncer sur Discord</h2>
+    <p class="aide">Ce qui a changé depuis la dernière annonce : projets, missions, votes, objets de l'échoppe. Rien ne part tant que vous ne cliquez pas sur « Publier ».</p>
+    <div class="bloc" id="nouveautes"></div>
     <h2>Ce qui se passe au village</h2>
     <p class="aide">Toutes les actions des joueurs, y compris celles qu'ils ne voient pas (commandes, fiches). Mise à jour automatique toutes les 30 secondes.</p>
     <ul class="fil-admin" id="fil"></ul>`;
@@ -441,7 +447,41 @@ async function vueTableau() {
       || '<li><span></span><span></span><span class="cache">Aucune activité pour l\'instant.</span></li>';
   };
   await fil();
+  await blocNouveautes();
   minuterie = setInterval(fil, 30000);
+}
+
+const SECTIONS = { chantiers: 'Chantiers', missions: 'Ordres de mission', votes: 'Conseil', echoppe: 'Échoppe' };
+async function blocNouveautes() {
+  const el = $('#nouveautes');
+  const { data, error } = await sb.from('nouveautes').select('*, objets(nom, prix, stock, visible)').order('cree_le');
+  if (error) { el.textContent = msgErreur(error); return; }
+  const lignes = (data || []).filter(n => !n.objet_id || n.objets?.visible);
+  if (!lignes.length) { el.innerHTML = '<p class="cache" style="margin:0">Rien de neuf à annoncer.</p>'; return; }
+  const texte = n => n.texte ? n.texte.replace(/\*\*/g, '')
+    : `📦 ${n.objets.nom} : ${po(n.objets.prix)}${n.objets.stock !== null ? ` (${n.objets.stock} en stock)` : ''}`;
+  el.innerHTML = Object.entries(SECTIONS).map(([k, titre]) => {
+    const ls = lignes.filter(n => n.section === k);
+    return ls.length ? `<p style="margin:.6em 0 .2em;color:var(--or)">${titre}</p>` + ls.map(n =>
+      `<label style="display:flex;gap:8px;padding:.2em 0"><input type="checkbox" name="nv" value="${n.id}" checked> <span>${esc(texte(n))}</span></label>`).join('') : '';
+  }).join('') + `<div class="en-ligne" style="margin-top:12px">
+      <button class="bouton" id="publier">Publier la sélection sur Discord</button>
+      <button class="bouton danger petit" id="ecarter">Retirer de la liste sans publier</button></div>`;
+  const choisis = () => [...el.querySelectorAll('input[name=nv]:checked')].map(i => i.value);
+  $('#publier').onclick = async () => {
+    const ids = choisis(); if (!ids.length) return toast('Rien de coché.', 'erreur');
+    $('#publier').disabled = true;
+    const { data: n, error: e } = await sb.rpc('mj_publier_nouveautes', { p_ids: ids });
+    if (e) { toast(msgErreur(e), 'erreur'); $('#publier').disabled = false; return; }
+    toast(`${n} nouveauté(s) publiée(s) sur Discord.`); dessinerMenu(); blocNouveautes();
+  };
+  $('#ecarter').onclick = async () => {
+    const ids = choisis(); if (!ids.length) return toast('Rien de coché.', 'erreur');
+    if (!confirm(`Retirer ${ids.length} ligne(s) sans les publier ?`)) return;
+    const { error: e } = await sb.from('nouveautes').delete().in('id', ids);
+    if (e) return toast(msgErreur(e), 'erreur');
+    dessinerMenu(); blocNouveautes();
+  };
 }
 
 // =============================================================== Village & jour
@@ -752,18 +792,96 @@ async function vueScrutins() {
   });
 }
 
+// =============================================================== Catalogue D&D 2024
+let catalogueCache = null;
+async function vueCatalogue() {
+  if (!catalogueCache) {
+    const { data, error } = await sb.from('catalogue').select('*').order('ordre');
+    if (error) throw error;
+    catalogueCache = data;
+  }
+  await lookup('cycles', true);
+  const cats = [...new Set(catalogueCache.map(c => c.categorie))];
+  vue.innerHTML = `<h1>Catalogue D&D 2024</h1>
+    <p class="aide">Équipement et objets magiques du SRD 5.2.1 (version libre des règles 2024), avec les prix du manuel. Les objets magiques ont la valeur indicative de leur rareté. Cochez des lignes puis « Mettre en vente » pour les ajouter à l'échoppe avec la majoration de frontière. Réservé au MJ.</p>
+    <div class="barre-outils">
+      <select id="cat" class="saisie" style="max-width:240px;background:var(--nuit);color:var(--clair)"><option value="">Toutes les catégories</option>${cats.map(c => `<option>${esc(c)}</option>`).join('')}</select>
+      <input type="search" id="q" placeholder="Rechercher (nom, rareté, propriété…)">
+      <button class="bouton" id="vendre" disabled>Mettre en vente</button><span class="cache" id="nb"></span>
+    </div>
+    <div class="table-cadre"><table class="donnees"><thead><tr><th></th><th>Nom</th><th>Catégorie</th><th>Prix</th><th>Poids</th><th>Détails</th></tr></thead><tbody id="tbody"></tbody></table></div>
+    <p class="aide" style="margin-top:1em">Source : Document de Référence du Système 5.2.1, Wizards of the Coast LLC, licence CC-BY-4.0.</p>`;
+  const choisis = new Set();
+  const majBouton = () => { $('#vendre').disabled = !choisis.size; $('#vendre').textContent = choisis.size ? `Mettre en vente (${choisis.size})` : 'Mettre en vente'; };
+  const dessiner = () => {
+    const cat = $('#cat').value, q = $('#q').value.trim().toLowerCase();
+    const lignes = catalogueCache.filter(c => (!cat || c.categorie === cat) &&
+      (!q || [c.nom, c.sous_categorie, c.details, c.rarete].join(' ').toLowerCase().includes(q)));
+    $('#nb').textContent = `${lignes.length} objet${lignes.length > 1 ? 's' : ''}`;
+    $('#tbody').innerHTML = lignes.map(c => `<tr>
+      <td><input type="checkbox" data-c="${c.id}" ${choisis.has(c.id) ? 'checked' : ''}></td>
+      <td><strong>${esc(c.nom)}</strong>${c.rarete ? `<br><span class="cache">${esc(c.rarete)}</span>` : ''}</td>
+      <td>${esc(c.categorie)}${c.sous_categorie ? `<br><span class="cache">${esc(c.sous_categorie)}</span>` : ''}</td>
+      <td class="num">${c.prix === null ? '<span class="cache">variable</span>' : po(c.prix)}</td>
+      <td style="white-space:nowrap">${esc(c.poids || '')}</td>
+      <td><span class="court">${esc(c.details || '')}</span></td></tr>`).join('');
+    $('#tbody').querySelectorAll('[data-c]').forEach(i => i.onchange = () => { i.checked ? choisis.add(i.dataset.c) : choisis.delete(i.dataset.c); majBouton(); });
+  };
+  $('#cat').onchange = dessiner; $('#q').oninput = dessiner; dessiner();
+  $('#vendre').onclick = () => mettreEnVente(catalogueCache.filter(c => choisis.has(c.id)));
+}
+
+function mettreEnVente(liste) {
+  const cycleEnCours = Object.values(cache.cycles || {}).find(c => c.en_cours);
+  const majo = 1.5;
+  const prixDe = (c, m) => c.prix === null ? '' : Math.round(c.prix * m * 100) / 100;
+  $('#modale-corps').innerHTML = `<form id="f-vente"><h2>Mettre en vente</h2>
+    <div class="deux">
+      <label class="champ"><span>Rayon</span><select name="rayon">${Object.entries(RAYONS).map(([k, l]) => `<option value="${k}" ${k === 'arrivage' ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
+      <label class="champ"><span>Majoration de frontière</span><input name="majo" type="number" step="0.05" min="0" value="${majo}"><span class="indice">1.5 = +50 % sur le prix du manuel</span></label>
+      <label class="champ"><span>Stock par objet (vide = illimité)</span><input name="stock" type="number" min="0" value="${liste.length === 1 ? 1 : 2}"></label>
+      <label class="champ"><span>Cycle d'arrivage</span><select name="cycle"><option value="">(aucun)</option>${Object.values(cache.cycles || {}).sort((a, b) => b.numero - a.numero).map(c => `<option value="${c.id}" ${cycleEnCours?.id === c.id ? 'selected' : ''}>${esc(LIBELLES.cycles(c))}</option>`).join('')}</select></label>
+    </div>
+    <div class="table-cadre"><table class="donnees"><thead><tr><th>Objet</th><th>Catégorie à l'échoppe</th><th>Prix de vente (po)</th></tr></thead><tbody>
+    ${liste.map((c, i) => `<tr><td>${esc(c.nom)}<br><span class="cache">manuel : ${c.prix === null ? 'variable' : po(c.prix)}</span></td>
+      <td><input class="saisie" name="cat-${i}" value="${esc(c.categorie === 'Objets magiques' ? 'Objets magiques' : (c.sous_categorie && c.categorie === 'Outils' ? c.sous_categorie : c.categorie))}" style="background:var(--mer);color:var(--clair)"></td>
+      <td><input class="saisie" name="prix-${i}" type="number" step="0.01" min="0" required value="${prixDe(c, majo)}" data-base="${c.prix ?? ''}" style="background:var(--mer);color:var(--clair);width:8em"></td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="pied"><span class="aide" style="margin:0">Chaque nouvel objet apparaîtra dans les nouveautés à annoncer.</span><div class="droite"><button type="button" class="bouton discret" onclick="this.closest('dialog').close()">Annuler</button><button class="bouton">Ajouter à l'échoppe</button></div></div></form>`;
+  modale.showModal();
+  const f = $('#f-vente');
+  f.majo.oninput = () => f.querySelectorAll('[data-base]').forEach(i => { if (i.dataset.base !== '') i.value = Math.round(Number(i.dataset.base) * Number(f.majo.value || 1) * 100) / 100; });
+  f.onsubmit = async ev => {
+    ev.preventDefault();
+    const lignes = liste.map((c, i) => ({
+      nom: c.nom, categorie: f[`cat-${i}`].value.trim() || c.categorie, rayon: f.rayon.value,
+      prix: Number(f[`prix-${i}`].value), stock: f.stock.value === '' ? null : Number(f.stock.value),
+      cycle_id: f.cycle.value || null, description: c.details || null, visible: true,
+    }));
+    if (liste.some((c, i) => f[`prix-${i}`].value === '')) return toast('Indiquez un prix pour chaque objet.', 'erreur');
+    const { error } = await sb.from('objets').insert(lignes);
+    if (error) return toast(msgErreur(error), 'erreur');
+    toast(`${lignes.length} objet(s) ajouté(s) à l'échoppe.`); modale.close(); dessinerMenu();
+  };
+}
+
 // =============================================================== Paramètres
 async function vueParametres() {
-  const [{ data: hook }, { data: mjs }] = await Promise.all([
-    sb.from('parametres').select('*').eq('cle', 'discord_webhook').maybeSingle(),
+  const [{ data: params }, { data: mjs }] = await Promise.all([
+    sb.from('parametres').select('*'),
     sb.from('mj_emails').select('*'),
   ]);
+  const P = Object.fromEntries((params || []).map(p => [p.cle, p.valeur || '']));
   vue.innerHTML = `<h1>Paramètres</h1>
     <div class="grille-2">
-      <form class="bloc" id="f-hook"><h2 style="margin-top:0">Annonces Discord</h2>
-        <p class="aide">Sur Discord : Paramètres du salon › Intégrations › Webhooks › Nouveau webhook › Copier l'URL. Collez-la ici : chaque vote y sera annoncé.</p>
-        <label class="champ"><span>URL du webhook</span><input name="url" type="url" value="${esc(hook?.valeur || '')}" placeholder="https://discord.com/api/webhooks/…"></label>
-        <div class="en-ligne"><button class="bouton">Enregistrer</button><button type="button" class="bouton discret" id="tester">Envoyer un message test</button></div>
+      <form class="bloc" id="f-hook"><h2 style="margin-top:0">Discord</h2>
+        <p class="aide">Pour chaque salon : Paramètres du salon › Intégrations › Webhooks › Nouveau webhook › Copier l'URL du webhook.</p>
+        <label class="champ"><span>Salon des annonces (nouveautés publiées depuis le tableau de bord)</span><input name="annonces" type="url" value="${esc(P.discord_webhook_annonces)}" placeholder="https://discord.com/api/webhooks/…"></label>
+        <label class="champ"><span>Salon des votes (chaque voix y est annoncée automatiquement)</span><input name="votes" type="url" value="${esc(P.discord_webhook)}" placeholder="https://discord.com/api/webhooks/…"></label>
+        <label class="champ"><span>Adresse du portail (ajoutée en bas des annonces)</span><input name="portail" type="url" value="${esc(P.url_portail)}"></label>
+        <div class="en-ligne"><button class="bouton">Enregistrer</button>
+          <button type="button" class="bouton discret" data-test="annonces">Tester les annonces</button>
+          <button type="button" class="bouton discret" data-test="votes">Tester les votes</button></div>
       </form>
       <div class="bloc"><h2 style="margin-top:0">Maîtres du jeu</h2>
         <p class="aide">Ces adresses ont accès à l'admin, après avoir créé leur compte depuis la page de connexion.</p>
@@ -773,15 +891,19 @@ async function vueParametres() {
     </div>`;
   $('#f-hook').onsubmit = async ev => {
     ev.preventDefault();
-    const url = ev.target.url.value.trim() || null;
-    if (url && !/^https:\/\/(discord|discordapp)\.com\/api\/webhooks\//.test(url)) return toast('Ce lien ne ressemble pas à un webhook Discord.', 'erreur');
-    const { error } = await sb.from('parametres').upsert({ cle: 'discord_webhook', valeur: url });
-    toast(error ? msgErreur(error) : 'Webhook enregistré.', error ? 'erreur' : 'ok');
+    const f = ev.target;
+    const hooks = { discord_webhook_annonces: f.annonces.value.trim() || null, discord_webhook: f.votes.value.trim() || null };
+    if (Object.values(hooks).some(u => u && !/^https:\/\/(discord|discordapp)\.com\/api\/webhooks\//.test(u))) return toast('Un des liens ne ressemble pas à un webhook Discord.', 'erreur');
+    const { error } = await sb.from('parametres').upsert([
+      ...Object.entries(hooks).map(([cle, valeur]) => ({ cle, valeur })),
+      { cle: 'url_portail', valeur: f.portail.value.trim() || null },
+    ]);
+    toast(error ? msgErreur(error) : 'Paramètres enregistrés.', error ? 'erreur' : 'ok');
   };
-  $('#tester').onclick = async () => {
-    const { error } = await sb.rpc('mj_tester_discord');
+  vue.querySelectorAll('[data-test]').forEach(b => b.onclick = async () => {
+    const { error } = await sb.rpc('mj_tester_webhook', { p_salon: b.dataset.test });
     toast(error ? msgErreur(error) : 'Message envoyé : vérifiez le salon Discord.', error ? 'erreur' : 'ok');
-  };
+  });
   $('#f-mj').onsubmit = async ev => {
     ev.preventDefault();
     const { error } = await sb.from('mj_emails').insert({ email: ev.target.email.value.trim().toLowerCase() });

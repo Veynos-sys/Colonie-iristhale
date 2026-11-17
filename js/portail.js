@@ -262,7 +262,8 @@ function missions() {
       ${m.description ? para(m.description) : ''}
       ${m.recompense ? `<p class="recompense">🪙 ${esc(m.recompense)}</p>` : ''}
       ${m.inscrits.length ? `<p style="margin-bottom:0"><strong>Volontaires :</strong></p><ul class="inscrits">${m.inscrits.map(i => `<li>${esc(i.personnage)}${i.message ? ` <span class="meta">« ${esc(i.message)} »</span>` : ''}</li>`).join('')}</ul>` : ''}
-      ${m.lien_discord ? `<p><a href="${esc(m.lien_discord)}" target="_blank" rel="noopener">Discussion sur le Discord</a></p>` : ''}
+      ${m.lien_discord || rapportDe(m) ? `<p class="liens-mission">${m.lien_discord ? `<a href="${esc(m.lien_discord)}" target="_blank" rel="noopener">💬 Discussion sur le Discord</a>` : ''}
+        ${rapportDe(m) ? `<button class="bouton discret petit" data-rapport="${m.rapport_id}">📖 Lire le rapport</button>` : ''}</p>` : ''}
       ${ouverte ? (m.inscrit
         ? `<button class="bouton discret petit" data-desinscrire="${m.id}">Me retirer</button>`
         : `<details><summary class="bouton petit" style="list-style:none">Me porter volontaire</summary>
@@ -278,6 +279,8 @@ function missions() {
   <div class="grille">${actives.map(carte).join('') || '<p class="vide">Aucun ordre en cours.</p>'}</div>
   ${closes.length ? `<h2 class="titre-section">Missions passées</h2><div class="grille">${closes.map(carte).join('')}</div>` : ''}`;
 }
+
+function rapportDe(m) { return m.rapport_id ? E.journal.find(j => j.id === m.rapport_id) : null; }
 
 function votes() {
   const s = E.scrutins;
@@ -422,6 +425,12 @@ function brancher(page) {
   contenu.querySelectorAll('.form-inscription').forEach(f => f.addEventListener('submit', ev => {
     ev.preventDefault();
     agir('portail_inscrire', { p_mission: f.dataset.mission, p_message: f.message.value }, f.querySelector('button'));
+  }));
+  contenu.querySelectorAll('[data-rapport]').forEach(b => b.addEventListener('click', () => {
+    const j = E.journal.find(x => x.id === b.dataset.rapport);
+    ouvrirFenetre(`<p class="meta" style="margin:0">${j.jour ? `Jour ${esc(j.jour)} · ` : ''}${TYPES_JOURNAL[j.type]}${j.auteur ? ` · ${esc(j.auteur)}` : ''}</p>
+      <h2>${esc(j.titre)}</h2>${para(j.contenu)}
+      ${j.lien_discord ? `<p><a href="${esc(j.lien_discord)}" target="_blank" rel="noopener">Lire sur le Discord</a></p>` : ''}`);
   }));
   contenu.querySelectorAll('[data-filtre]').forEach(b => b.addEventListener('click', () => { filtreJournal = b.dataset.filtre; rendre(); }));
   contenu.querySelectorAll('[data-pnj]').forEach(b => b.addEventListener('click', () => ouvrirFenetre(fichePersonne(E.pnj.find(p => p.id === b.dataset.pnj), 'pnj'))));

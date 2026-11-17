@@ -129,6 +129,7 @@ begin
     'missions', (select coalesce(jsonb_agg(jsonb_build_object(
         'id', m.id, 'titre', m.titre, 'resume', m.resume, 'description', m.description,
         'recompense', m.recompense, 'donneur', m.donneur, 'statut', m.statut, 'lien_discord', m.lien_discord,
+        'rapport_id', m.rapport_id,
         'inscrits', (select coalesce(jsonb_agg(jsonb_build_object('personnage', cc.personnage, 'message', i.message) order by i.cree_le), '[]'::jsonb)
                      from public.inscriptions i join public.colons cc on cc.id = i.colon_id where i.mission_id = m.id),
         'inscrit', exists (select 1 from public.inscriptions i where i.mission_id = m.id and i.colon_id = c.id)

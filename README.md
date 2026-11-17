@@ -15,3 +15,15 @@ Les joueurs ne lisent jamais les tables directement : toutes leurs actions passe
 découvertes, les votes en brouillon et les savoirs réservés ne quittent jamais la base.
 
 Le site est statique (HTML, CSS, JavaScript sans compilation) et publié par GitHub Pages.
+
+## Annonces Discord
+
+- Salon des votes : chaque voix est annoncée automatiquement.
+- Salon des annonces : les nouveautés (projets, missions, votes, objets de l'échoppe) s'accumulent dans le
+  tableau de bord de l'admin et ne partent que lorsque le MJ clique sur « Publier la sélection sur Discord ».
+
+## Catalogue D&D 2024
+
+Le catalogue de l'admin reprend l'équipement et les objets magiques du Document de Référence du Système 5.2.1
+(SRD 5.2.1, version française) par Wizards of the Coast LLC, sous licence Creative Commons Attribution 4.0
+International (https://creativecommons.org/licenses/by/4.0/legalcode).
