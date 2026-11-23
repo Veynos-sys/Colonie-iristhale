@@ -476,7 +476,7 @@ async function vueTableau() {
       <a class="tuile" href="#or"><strong style="font-size:1.3rem">${poHTML((soldes || []).reduce((s, r) => s + Number(r.solde), 0))}</strong><span>d'or dans les bourses</span></a>
     </div>
     <h2>Nouveautés à annoncer sur Discord</h2>
-    <p class="aide">Ce qui a changé depuis la dernière annonce : projets, missions, votes, objets de l'échoppe. Rien ne part tant que vous ne cliquez pas sur « Publier ».</p>
+    <p class="aide">Ce qui a changé depuis la dernière annonce : missions, entrées du journal, projets, votes, objets de l'échoppe. Le texte ci-dessous est exactement celui qui partira. Rien ne part tant que vous ne cliquez pas sur « Publier ».</p>
     <div class="bloc" id="nouveautes"></div>
     <h2>Ce qui se passe au village</h2>
     <p class="aide">Toutes les actions des joueurs, y compris celles qu'ils ne voient pas (commandes, fiches). Mise à jour automatique toutes les 30 secondes.</p>
@@ -519,19 +519,19 @@ async function vueTableau() {
   minuterie = setInterval(fil, 30000);
 }
 
-const SECTIONS = { chantiers: 'Chantiers', missions: 'Ordres de mission', votes: 'Conseil', echoppe: 'Échoppe' };
+const SECTIONS = { missions: 'Ordres de mission', journal: 'Journal du camp', chantiers: 'Chantiers', votes: 'Conseil', echoppe: 'Échoppe' };
 async function blocNouveautes() {
   const el = $('#nouveautes');
-  const { data, error } = await sb.from('nouveautes').select('*, objets(nom, prix, stock, visible)').order('cree_le');
+  const { data, error } = await sb.rpc('mj_apercu_nouveautes');
   if (error) { el.textContent = msgErreur(error); return; }
-  const lignes = (data || []).filter(n => !n.objet_id || n.objets?.visible);
+  const lignes = (data || []).filter(n => n.texte);
   if (!lignes.length) { el.innerHTML = '<p class="cache" style="margin:0">Rien de neuf à annoncer.</p>'; return; }
-  const texte = n => n.texte ? n.texte.replace(/\*\*/g, '')
-    : `📦 ${n.objets.nom} : ${po(n.objets.prix)}${n.objets.stock !== null ? ` (${n.objets.stock} en stock)` : ''}`;
+  // aperçu lisible du texte Discord (gras, italique et petits textes retirés)
+  const texte = n => n.texte.replace(/\*\*|__/g, '').replace(/^-# /gm, '').replace(/<(https?:[^>]+)>/g, '$1');
   el.innerHTML = Object.entries(SECTIONS).map(([k, titre]) => {
     const ls = lignes.filter(n => n.section === k);
     return ls.length ? `<p style="margin:.6em 0 .2em;color:var(--or)">${titre}</p>` + ls.map(n =>
-      `<label style="display:flex;gap:8px;padding:.2em 0"><input type="checkbox" name="nv" value="${n.id}" checked> <span>${esc(texte(n))}</span></label>`).join('') : '';
+      `<label class="nouveaute"><input type="checkbox" name="nv" value="${n.id}" checked> <span>${esc(texte(n))}</span></label>`).join('') : '';
   }).join('') + `<div class="en-ligne" style="margin-top:12px">
       <button class="bouton" id="publier">Publier la sélection sur Discord</button>
       <button class="bouton danger petit" id="ecarter">Retirer de la liste sans publier</button></div>`;

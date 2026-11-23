@@ -115,3 +115,7 @@ table.donnees{width:100%;border-collapse:collapse;font-size:.92rem}
 .visionneuse-admin .pt{transform:translate(-50%,-50%) scale(calc(1 / var(--z)))}
 .zoom-btns{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:6px;z-index:2}
 .zoom-btns button{width:34px;height:34px;border-radius:4px;border:1px solid var(--or);background:rgba(28,33,64,.9);color:var(--or-pale);font-size:1.15rem;cursor:pointer}
+
+.nouveaute{display:flex;gap:8px;align-items:flex-start;padding:.35em 0;border-top:1px solid rgba(169,166,189,.1)}
+.nouveaute span{white-space:pre-wrap;font-size:.92rem;line-height:1.45}
+.nouveaute input{margin-top:.3em}
